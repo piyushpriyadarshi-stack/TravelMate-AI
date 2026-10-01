@@ -1,0 +1,15 @@
+// Polyfill global for browser compatibility with AWS Cognito SDK
+if (typeof window !== "undefined" && typeof window.global === "undefined") {
+  window.global = window;
+}
+
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

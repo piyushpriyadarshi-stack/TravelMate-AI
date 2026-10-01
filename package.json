@@ -1,0 +1,31 @@
+{
+  "name": "travelmate-ai",
+  "version": "1.0.0",
+  "description": "TravelMate AI - Smart Travel Planning, Hotel, Transportation & Booking Platform",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "build:client": "npm run build --prefix client",
+    "prisma:generate": "npm run prisma:generate --prefix server",
+    "prisma:seed": "npm run prisma:seed --prefix server"
+  },
+  "keywords": [
+    "travel",
+    "ai",
+    "booking",
+    "hotel",
+    "transportation",
+    "gemini",
+    "razorpay",
+    "prisma",
+    "react",
+    "express"
+  ],
+  "author": "TravelMate AI Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

@@ -31,11 +31,12 @@ services:
         sync: false
 
   # 2. TravelMate React/Vite Frontend Static Site
-  - type: static
+  - type: web
     name: travelmate-frontend
+    runtime: static
     rootDir: client
     buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    staticPublishPath: ./dist
     routes:
       - type: rewrite
         source: /*

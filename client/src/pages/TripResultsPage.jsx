@@ -133,7 +133,6 @@ export function TripResultsPage() {
   const [guestDetails, setGuestDetails] = useState({
     fullName: user?.name || "Traveler",
     email: user?.email || "",
-    phone: user?.phone || "+91 98765 43210",
     specialRequests: ""
   });
 
@@ -143,8 +142,7 @@ export function TripResultsPage() {
       setGuestDetails(prev => ({
         ...prev,
         fullName: user.name || prev.fullName,
-        email: user.email || prev.email,
-        phone: user.phone || prev.phone
+        email: user.email || prev.email
       }));
     }
   }, [user]);
@@ -572,8 +570,7 @@ export function TripResultsPage() {
             order_id: orderRes.order_id || orderRes.orderId,
             prefill: {
               name: guestDetails.fullName,
-              email: guestDetails.email,
-              contact: guestDetails.phone
+              email: guestDetails.email
             },
             theme: { color: "#0284c7" },
             handler: async (response) => {
@@ -2639,7 +2636,7 @@ export function TripResultsPage() {
                         {bookingConfirmation.guestDetails?.fullName}
                       </p>
                       <p className="text-[11px] text-slate-500 truncate">
-                        {bookingConfirmation.guestDetails?.phone} • {bookingConfirmation.guestDetails?.email}
+                        {bookingConfirmation.guestDetails?.email}
                       </p>
                     </div>
 

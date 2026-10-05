@@ -23,7 +23,6 @@ export function RazorpayCheckoutDemoPage() {
   const [amountRupees, setAmountRupees] = useState("500");
   const [customerName, setCustomerName] = useState("Piyush Sharma");
   const [customerEmail, setCustomerEmail] = useState("traveler@example.com");
-  const [customerPhone, setCustomerPhone] = useState("+91 98765 43210");
   const [paymentSuccessData, setPaymentSuccessData] = useState(null);
 
   const amountInPaise = Math.max(100, Math.round(Number(amountRupees || 1) * 100));
@@ -167,18 +166,6 @@ export function RazorpayCheckoutDemoPage() {
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100">
@@ -188,8 +175,7 @@ export function RazorpayCheckoutDemoPage() {
                 receipt={`rcpt_demo_${Date.now()}`}
                 customer={{
                   name: customerName,
-                  email: customerEmail,
-                  contact: customerPhone
+                  email: customerEmail
                 }}
                 buttonText={`Pay ₹${Number(amountRupees || 0).toLocaleString("en-IN")} with Razorpay`}
                 onSuccess={(data) => {

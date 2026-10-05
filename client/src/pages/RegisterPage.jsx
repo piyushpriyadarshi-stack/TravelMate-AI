@@ -1,7 +1,7 @@
 // ==================================================
 // TravelMate AI - Registration Page with Amazon Cognito
 // Features:
-// - Enter Name, Email Address, Phone, and Password
+// - Enter Name, Email Address, and Password
 // - Amazon Cognito User Pool Sign-Up with Email Verification
 // - Step 1: Input details -> Cognito registers user & sends 6-digit code
 // - Step 2: TravelMate Verification UI -> Enter code to confirm & login
@@ -14,7 +14,6 @@ import {
   User,
   Mail,
   Lock,
-  Phone,
   ArrowRight,
   Eye,
   EyeOff,
@@ -39,7 +38,6 @@ export function RegisterPage() {
   // Form input state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -85,7 +83,6 @@ export function RegisterPage() {
 
     const trimmedName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const trimmedPhone = phone.trim();
 
     if (!trimmedName) {
       setErrorMessage("Please enter your name.");
@@ -95,17 +92,6 @@ export function RegisterPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       setErrorMessage("Please enter a valid email address.");
-      return;
-    }
-
-    if (!trimmedPhone) {
-      setErrorMessage("Please enter your phone number.");
-      return;
-    }
-
-    const phoneDigits = trimmedPhone.replace(/\D/g, "");
-    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
-      setErrorMessage("Please enter a valid phone number (at least 7 digits).");
       return;
     }
 
@@ -125,7 +111,6 @@ export function RegisterPage() {
       const res = await register({
         name: trimmedName,
         email: cleanEmail,
-        phone: trimmedPhone,
         password: password
       });
 
@@ -220,8 +205,7 @@ export function RegisterPage() {
         email: email.trim().toLowerCase(),
         code,
         password,
-        name: name.trim(),
-        phone: phone.trim()
+        name: name.trim()
       });
 
       setSuccessMessage(res?.message || "Account verified successfully! Welcome to TravelMate AI.");
@@ -331,28 +315,6 @@ export function RegisterPage() {
                       if (errorMessage) setErrorMessage("");
                     }}
                     placeholder="name@example.com"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500 transition-all disabled:opacity-50"
-                  />
-                </div>
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="tel"
-                    required
-                    disabled={isSubmitting}
-                    value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                    placeholder="e.g. +91 98765 43210"
                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500 transition-all disabled:opacity-50"
                   />
                 </div>

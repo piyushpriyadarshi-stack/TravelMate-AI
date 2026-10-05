@@ -1,7 +1,7 @@
 // ==================================================
 // TravelMate AI - User Profile Page (Stage 2)
 // Displays authenticated user details from backend,
-// allows updating name/phone, and manages session logout.
+// allows updating personal info, and manages session logout.
 // ==================================================
 
 import React, { useState } from "react";
@@ -9,7 +9,6 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   User,
   Mail,
-  Phone,
   Shield,
   Calendar,
   Key,
@@ -31,8 +30,7 @@ export function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    phone: user?.phone || ""
+    name: user?.name || ""
   });
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState({ type: "", text: "" });
@@ -54,8 +52,7 @@ export function ProfilePage() {
 
     try {
       await updateProfile({
-        name: formData.name.trim(),
-        phone: formData.phone.trim()
+        name: formData.name.trim()
       });
       setIsEditing(false);
       setStatusMessage({ type: "success", text: "Profile details updated successfully!" });
@@ -202,22 +199,6 @@ export function ProfilePage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+91 98765 43210"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
               <div className="flex items-center space-x-3 pt-2">
                 <button
                   type="submit"
@@ -237,7 +218,7 @@ export function ProfilePage() {
               </div>
             </form>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Name</span>
@@ -252,14 +233,6 @@ export function ProfilePage() {
                 <p className="font-bold text-slate-800 text-sm flex items-center space-x-1.5">
                   <Mail className="w-4 h-4 text-sky-600" />
                   <span>{user?.email}</span>
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
-                <p className="font-bold text-slate-800 text-sm flex items-center space-x-1.5">
-                  <Phone className="w-4 h-4 text-sky-600" />
-                  <span>{user?.phone || "Not provided"}</span>
                 </p>
               </div>
 

@@ -381,7 +381,7 @@ export function RegisterPage() {
 
             {/* Google Sign-In */}
             <GoogleSignInButton
-              text="Sign up with Google"
+              text="Continue with Google"
               onSuccess={(res) => {
                 setSuccessMessage(res?.message || "Connected with Google successfully!");
                 setTimeout(() => {

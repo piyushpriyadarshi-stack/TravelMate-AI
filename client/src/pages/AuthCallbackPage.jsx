@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { apiService } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { cognitoService } from "../services/cognito.service";
 
 export function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -42,7 +43,10 @@ export function AuthCallbackPage() {
       }
 
       try {
-        const redirectUri = `${window.location.origin}/auth/callback`;
+        const redirectUri = window.location.pathname === "/auth/callback" && import.meta.env.VITE_COGNITO_REDIRECT_URI?.includes("/auth/callback")
+          ? `${window.location.origin}/auth/callback`
+          : cognitoService.getRedirectUri();
+
         const res = await apiService.cognitoExchangeOAuth({
           code,
           redirectUri

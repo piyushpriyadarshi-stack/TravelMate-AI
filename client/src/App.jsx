@@ -22,7 +22,16 @@ import { DestinationDetailsPage } from "./pages/DestinationDetailsPage";
 import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { RazorpayCheckoutDemoPage } from "./pages/RazorpayCheckoutDemoPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
+import { useSearchParams } from "react-router-dom";
 import { NotFoundPage } from "./pages/NotFoundPage";
+
+function HomePageRoute() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("code") || searchParams.get("error")) {
+    return <AuthCallbackPage />;
+  }
+  return <HomePage />;
+}
 
 export default function App() {
   return (
@@ -36,7 +45,7 @@ export default function App() {
           <main className="flex-1">
             <Routes>
               {/* Public Routes (Stage 3 Destination Discovery & Search) */}
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={<HomePageRoute />} />
               <Route path="/destinations" element={<ExplorePage />} />
               <Route path="/destinations/:id" element={<DestinationDetailsPage />} />
               <Route path="/search" element={<TripResultsPage />} />

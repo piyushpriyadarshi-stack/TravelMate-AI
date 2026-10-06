@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/react";
 // Polyfill global for browser compatibility with AWS Cognito SDK
 if (typeof window !== "undefined" && typeof window.global === "undefined") {
   window.global = window;
@@ -8,8 +9,16 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!PUBLISHABLE_KEY) {
+  console.warn("Missing VITE_CLERK_PUBLISHABLE_KEY in client/.env");
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+      <App />
+    </ClerkProvider>
   </React.StrictMode>
 );

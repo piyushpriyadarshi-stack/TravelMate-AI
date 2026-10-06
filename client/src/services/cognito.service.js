@@ -13,20 +13,24 @@ import {
 
 class CognitoFrontendService {
   constructor() {
-    this.region = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
-    this.userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID || "";
-    this.clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || "";
-    this.domain = import.meta.env.VITE_COGNITO_DOMAIN || "";
+    this.region = import.meta.env.VITE_COGNITO_REGION || "ap-south-1";
+    this.userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID || "ap-south-1_DswIEDMFO";
+    this.clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || "2al1ikmgold3cj3a0v8h9ipu26";
+    this.domain = import.meta.env.VITE_COGNITO_DOMAIN || "ap-south-1dswiedmfo.auth.ap-south-1.amazoncognito.com";
+    this.redirectUri = import.meta.env.VITE_COGNITO_REDIRECT_URI || "http://localhost:5173";
+    this.scopes = import.meta.env.VITE_COGNITO_SCOPES || "openid email";
 
     this.userPool = null;
     this.initPool();
   }
 
   initPool() {
-    this.region = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
-    this.userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID || "";
-    this.clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || "";
-    this.domain = import.meta.env.VITE_COGNITO_DOMAIN || "";
+    this.region = import.meta.env.VITE_COGNITO_REGION || "ap-south-1";
+    this.userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID || "ap-south-1_DswIEDMFO";
+    this.clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || "2al1ikmgold3cj3a0v8h9ipu26";
+    this.domain = import.meta.env.VITE_COGNITO_DOMAIN || "ap-south-1dswiedmfo.auth.ap-south-1.amazoncognito.com";
+    this.redirectUri = import.meta.env.VITE_COGNITO_REDIRECT_URI || "http://localhost:5173";
+    this.scopes = import.meta.env.VITE_COGNITO_SCOPES || "openid email";
 
     if (this.isConfigured()) {
       try {
@@ -47,6 +51,17 @@ class CognitoFrontendService {
       !this.userPoolId.includes("placeholder") &&
       !this.userPoolId.includes("example")
     );
+  }
+
+  /**
+   * Resolves the exact OAuth return/callback URL.
+   * Priority: VITE_COGNITO_REDIRECT_URI -> current window origin (http://localhost:5173).
+   */
+  getRedirectUri() {
+    if (import.meta.env.VITE_COGNITO_REDIRECT_URI) {
+      return import.meta.env.VITE_COGNITO_REDIRECT_URI;
+    }
+    return window.location.origin;
   }
 
   getCognitoUser(email) {
@@ -326,13 +341,30 @@ class CognitoFrontendService {
 
   /**
    * Build Cognito Managed Login URL for Google federation.
+   * Redirects browser to Cognito /oauth2/authorize with identity_provider=Google.
+   * Uses the configured callback URL (http://localhost:5173) and allowed scopes.
    */
   getGoogleLoginUrl() {
-    const callbackUrl = `${window.location.origin}/auth/callback`;
-    if (this.domain) {
-      return `https://${this.domain}/oauth2/authorize?identity_provider=Google&response_type=code&client_id=${this.clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=email+openid+profile`;
+    if (!this.domain || !this.clientId) {
+      return null;
     }
-    return null;
+    const cleanDomain = this.domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const redirectUri = this.getRedirectUri();
+    const scopes = (this.scopes || "openid email").trim().replace(/\s+/g, "+");
+
+    return `https://${cleanDomain}/oauth2/authorize?identity_provider=Google&response_type=code&client_id=${encodeURIComponent(this.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}`;
+  }
+
+  /**
+   * Build Cognito Hosted UI Logout URL.
+   */
+  getCognitoLogoutUrl() {
+    if (!this.domain || !this.clientId) {
+      return null;
+    }
+    const cleanDomain = this.domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const logoutUri = `${window.location.origin}/login`;
+    return `https://${cleanDomain}/logout?client_id=${encodeURIComponent(this.clientId)}&logout_uri=${encodeURIComponent(logoutUri)}`;
   }
 
   /**

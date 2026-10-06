@@ -25,18 +25,34 @@ async function request(endpoint, options = {}) {
       ...options
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { message: text };
+    }
 
     if (!response.ok) {
+      if (response.status === 405) {
+        throw new Error(
+          "Backend API is not reachable on this domain. Please ensure VITE_API_BASE_URL points to your deployed backend service."
+        );
+      }
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new Error(
+          `Backend server is temporarily unreachable (HTTP ${response.status}). Please check your server connection.`
+        );
+      }
       // If 404 with notFound flag, return data gracefully so caller can render specific notFound message
-      if (response.status === 404 && data.notFound) {
+      if (response.status === 404 && data?.notFound) {
         return {
           success: false,
           notFound: true,
           message: data.message || "We couldn't find this destination yet. Try another city or country."
         };
       }
-      throw new Error(data.message || `Request failed with status ${response.status}`);
+      throw new Error(data?.message || data?.error || (typeof data === "string" ? data : `Request failed with status ${response.status}`));
     }
 
     return data;

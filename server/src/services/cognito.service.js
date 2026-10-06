@@ -20,10 +20,11 @@ const {
 
 class CognitoBackendService {
   constructor() {
-    this.region = process.env.COGNITO_REGION || process.env.AWS_REGION || "us-east-1";
-    this.userPoolId = process.env.COGNITO_USER_POOL_ID || "";
-    this.clientId = process.env.COGNITO_CLIENT_ID || "";
-    this.domain = process.env.COGNITO_DOMAIN || "";
+    this.region = process.env.COGNITO_REGION || process.env.AWS_REGION || "ap-south-1";
+    this.userPoolId = process.env.COGNITO_USER_POOL_ID || "ap-south-1_DswIEDMFO";
+    this.clientId = process.env.COGNITO_CLIENT_ID || "2al1ikmgold3cj3a0v8h9ipu26";
+    this.clientSecret = process.env.COGNITO_CLIENT_SECRET || "";
+    this.domain = (process.env.COGNITO_DOMAIN || "ap-south-1dswiedmfo.auth.ap-south-1.amazoncognito.com").replace(/^https?:\/\//, "").replace(/\/$/, "");
 
     this.idTokenVerifier = null;
     this.accessTokenVerifier = null;
@@ -33,10 +34,11 @@ class CognitoBackendService {
   }
 
   initClients() {
-    this.region = process.env.COGNITO_REGION || process.env.AWS_REGION || "us-east-1";
-    this.userPoolId = process.env.COGNITO_USER_POOL_ID || "";
-    this.clientId = process.env.COGNITO_CLIENT_ID || "";
-    this.domain = process.env.COGNITO_DOMAIN || "";
+    this.region = process.env.COGNITO_REGION || process.env.AWS_REGION || "ap-south-1";
+    this.userPoolId = process.env.COGNITO_USER_POOL_ID || "ap-south-1_DswIEDMFO";
+    this.clientId = process.env.COGNITO_CLIENT_ID || "2al1ikmgold3cj3a0v8h9ipu26";
+    this.clientSecret = process.env.COGNITO_CLIENT_SECRET || "";
+    this.domain = (process.env.COGNITO_DOMAIN || "ap-south-1dswiedmfo.auth.ap-south-1.amazoncognito.com").replace(/^https?:\/\//, "").replace(/\/$/, "");
 
     if (this.isConfigured()) {
       try {
@@ -82,10 +84,10 @@ class CognitoBackendService {
     return {
       isConfigured: this.isConfigured(),
       region: this.region,
-      userPoolId: this.userPoolId || "us-east-1_travelmate_placeholder",
-      clientId: this.clientId || "travelmate_client_placeholder",
+      userPoolId: this.userPoolId,
+      clientId: this.clientId,
       domain: this.domain,
-      callbackUrl: `${process.env.CLIENT_URL || "http://localhost:5173"}/auth/callback`,
+      callbackUrl: `${process.env.CLIENT_URL || "http://localhost:5173"}`,
       logoutUrl: `${process.env.CLIENT_URL || "http://localhost:5173"}/login`
     };
   }
@@ -177,41 +179,41 @@ class CognitoBackendService {
    */
   async exchangeOAuthCode({ code, redirectUri }) {
     if (!this.domain) {
-      // If dev / simulated without domain, return simulated dev token
-      const sub = `cognito-google-sub-${Date.now()}`;
-      const payload = {
-        sub,
-        email: "google.user@example.com",
-        name: "Google Traveler",
-        email_verified: true,
-        identities: [{ providerName: "Google" }],
-        token_use: "id",
-        exp: Math.floor(Date.now() / 1000) + 3600
-      };
-      const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64");
-      const body = Buffer.from(JSON.stringify(payload)).toString("base64");
-      const id_token = `${header}.${body}.dev_signature`;
-      return { id_token, access_token: id_token };
+      throw new Error("COGNITO_DOMAIN is not configured in server environment.");
     }
 
     const domainUrl = this.domain.startsWith("http") ? this.domain : `https://${this.domain}`;
     const tokenUrl = `${domainUrl}/oauth2/token`;
 
+    const targetRedirectUri = redirectUri || `${process.env.CLIENT_URL || "http://localhost:5173"}`;
+
     const params = new URLSearchParams();
     params.append("grant_type", "authorization_code");
     params.append("client_id", this.clientId);
     params.append("code", code);
-    params.append("redirect_uri", redirectUri || `${process.env.CLIENT_URL || "http://localhost:5173"}/auth/callback`);
+    params.append("redirect_uri", targetRedirectUri);
+
+    const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    if (this.clientSecret) {
+      headers["Authorization"] = `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`;
+    }
 
     const response = await fetch(tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers,
       body: params.toString()
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    let data = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      data = { error: responseText };
+    }
+
     if (!response.ok) {
-      throw new Error(data.error_description || data.error || "Failed to exchange authorization code with Cognito.");
+      throw new Error(data.error_description || data.error || `Failed to exchange authorization code with Cognito (Status ${response.status}).`);
     }
     return data;
   }

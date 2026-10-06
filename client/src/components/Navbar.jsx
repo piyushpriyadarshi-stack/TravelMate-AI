@@ -21,7 +21,7 @@ import {
   UserPlus,
   MapPin
 } from "lucide-react";
-import { SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import { SignInButton, SignUpButton } from "@clerk/react";
 import { useAuth } from "../context/AuthContext";
 
 export function Navbar() {
@@ -112,7 +112,7 @@ export function Navbar() {
             )}
 
             {isAuthenticated ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
                 <Link
                   to="/profile"
                   className="flex items-center space-x-2 px-3.5 py-2 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all text-xs font-bold text-slate-800"
@@ -127,7 +127,6 @@ export function Navbar() {
                     </span>
                   )}
                 </Link>
-                <UserButton afterSignOutUrl="/" />
               </div>
             ) : (
               <div className="flex items-center space-x-2">
@@ -155,7 +154,15 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <div className="flex lg:hidden items-center space-x-2">
             {isAuthenticated ? (
-              <UserButton afterSignOutUrl="/" />
+              <Link
+                to="/profile"
+                className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100"
+                aria-label="Profile"
+              >
+                <div className="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  {user?.name ? user.name[0].toUpperCase() : "U"}
+                </div>
+              </Link>
             ) : (
               <SignInButton mode="modal">
                 <button
@@ -212,17 +219,14 @@ export function Navbar() {
           <div className="pt-4 border-t border-slate-100 flex flex-col space-y-2">
             {isAuthenticated ? (
               <>
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <Link
-                    to="/profile"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center space-x-3 text-sm font-semibold text-slate-800"
-                  >
-                    <User className="w-5 h-5 text-sky-600" />
-                    <span>Profile ({user?.name})</span>
-                  </Link>
-                  <UserButton afterSignOutUrl="/" />
-                </div>
+                <Link
+                  to="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center space-x-3 px-4 py-3 text-sm font-semibold text-slate-800 rounded-xl bg-slate-50 border border-slate-200 hover:bg-sky-50/50 hover:border-sky-200 transition-colors"
+                >
+                  <User className="w-5 h-5 text-sky-600" />
+                  <span>Profile ({user?.name})</span>
+                </Link>
                 {isAdmin && (
                   <Link
                     to="/admin"

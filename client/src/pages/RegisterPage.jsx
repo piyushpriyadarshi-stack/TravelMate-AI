@@ -1,11 +1,9 @@
 // ==================================================
-// TravelMate AI - Registration Page with Amazon Cognito
+// TravelMate AI - User Registration Page
 // Features:
 // - Enter Name, Email Address, and Password
-// - Amazon Cognito User Pool Sign-Up with Email Verification
-// - Step 1: Input details -> Cognito registers user & sends 6-digit code
-// - Step 2: TravelMate Verification UI -> Enter code to confirm & login
-// - Google Sign-In with Cognito federation
+// - Two-step Email Verification
+// - Direct Google Sign-In
 // ==================================================
 
 import React, { useState, useRef, useEffect } from "react";
@@ -359,7 +357,7 @@ export function RegisterPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Creating Cognito account...</span>
+                    <span>Creating account...</span>
                   </>
                 ) : (
                   <>
@@ -489,7 +487,7 @@ export function RegisterPage() {
                 </div>
 
                 <p className="text-[11px] text-center text-slate-400 mt-2">
-                  Code sent via Amazon Cognito User Pool
+                  Verification code sent to your email address
                 </p>
               </div>
 
@@ -525,7 +523,7 @@ export function RegisterPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Verifying with Cognito...</span>
+                      <span>Verifying code...</span>
                     </>
                   ) : (
                     <>

@@ -299,21 +299,6 @@ export const apiService = {
       body: JSON.stringify({ credential })
     }),
 
-  // Amazon Cognito User Pools integration endpoints
-  getCognitoConfig: () => request("/auth/cognito/config"),
-
-  cognitoSession: (data) =>
-    request("/auth/cognito/session", {
-      method: "POST",
-      body: JSON.stringify(data)
-    }),
-
-  cognitoExchangeOAuth: (data) =>
-    request("/auth/cognito/exchange-oauth", {
-      method: "POST",
-      body: JSON.stringify(data)
-    }),
-
   logoutUser: () =>
     request("/auth/logout", {
       method: "POST"

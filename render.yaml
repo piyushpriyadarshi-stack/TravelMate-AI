@@ -21,14 +21,6 @@ services:
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
-      - key: COGNITO_USER_POOL_ID
-        sync: false
-      - key: COGNITO_CLIENT_ID
-        sync: false
-      - key: COGNITO_REGION
-        value: us-east-1
-      - key: COGNITO_DOMAIN
-        sync: false
 
   # 2. TravelMate React/Vite Frontend Static Site
   - type: web
@@ -47,12 +39,4 @@ services:
       - key: VITE_GOOGLE_CLIENT_ID
         sync: false
       - key: VITE_RAZORPAY_KEY_ID
-        sync: false
-      - key: VITE_COGNITO_USER_POOL_ID
-        sync: false
-      - key: VITE_COGNITO_CLIENT_ID
-        sync: false
-      - key: VITE_COGNITO_REGION
-        value: us-east-1
-      - key: VITE_COGNITO_DOMAIN
         sync: false

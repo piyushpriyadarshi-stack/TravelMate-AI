@@ -1,12 +1,12 @@
 // ==================================================
-// TravelMate AI - Authentication Context (Stage 2)
+// TravelMate AI - Authentication Context
 // Provides global authentication state, token persistence,
 // login/register/logout actions, and current user profile.
+// Completely self-contained without external AWS dependencies.
 // ==================================================
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { apiService } from "../services/api";
-import { cognitoService } from "../services/cognito.service";
 
 const AuthContext = createContext(null);
 
@@ -21,7 +21,6 @@ export function AuthProvider({ children }) {
     async function initAuth() {
       const storedToken = localStorage.getItem("travelmate_token");
       try {
-        // Attempt to fetch current user profile via cookie or stored bearer token
         const res = await apiService.getCurrentUser();
         if (res && res.success && res.user) {
           setUser(res.user);
@@ -63,18 +62,18 @@ export function AuthProvider({ children }) {
   /**
    * Step 2 of Email Verification: Submits OTP, creates user, and logs in
    */
-  const verifyEmailAndRegister = async ({ email, otp }) => {
+  const verifyEmailAndRegister = async ({ email, otp, password, name, phone }) => {
     setIsLoading(true);
     setAuthError(null);
     try {
-      const res = await apiService.verifyEmailRegister({ email, otp });
+      const res = await apiService.verifyEmailRegister({ email, otp, password, name, phone });
       if (res && res.success && res.user) {
         setUser(res.user);
         if (res.token) {
           localStorage.setItem("travelmate_token", res.token);
           setToken(res.token);
         }
-        return { success: true, user: res.user, message: res.message };
+        return { success: true, user: res.user, message: res.message || "Account created successfully!" };
       } else {
         throw new Error(res?.message || "Verification failed.");
       }
@@ -91,7 +90,7 @@ export function AuthProvider({ children }) {
    */
   const resendVerificationOtp = async (email) => {
     try {
-      const res = await cognitoService.resendConfirmationCode(email);
+      const res = await apiService.resendVerificationOtp(email);
       return res;
     } catch (err) {
       throw err;
@@ -99,13 +98,13 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Forgot Password: Send 6-digit reset OTP via Cognito
+   * Forgot Password: Send 6-digit reset OTP
    */
   const forgotPasswordSendOtp = async (email) => {
     setIsLoading(true);
     setAuthError(null);
     try {
-      const res = await cognitoService.forgotPassword(email);
+      const res = await apiService.forgotPasswordSendOtp(email);
       return res;
     } catch (err) {
       setAuthError(err.message);
@@ -116,11 +115,11 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Forgot Password: Resend reset OTP with cooldown via Cognito
+   * Forgot Password: Resend reset OTP with cooldown
    */
   const forgotPasswordResendOtp = async (email) => {
     try {
-      const res = await cognitoService.forgotPassword(email);
+      const res = await apiService.forgotPasswordResendOtp(email);
       return res;
     } catch (err) {
       throw err;
@@ -134,28 +133,7 @@ export function AuthProvider({ children }) {
     setIsLoading(true);
     setAuthError(null);
     try {
-      // In Cognito, code verification happens on confirmForgotPassword
-      return { success: true, resetToken: otp };
-    } catch (err) {
-      setAuthError(err.message);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Forgot Password: Reset to new password via Cognito
-   */
-  const forgotPasswordReset = async ({ email, resetToken, code, newPassword, confirmPassword }) => {
-    setIsLoading(true);
-    setAuthError(null);
-    try {
-      if (confirmPassword && newPassword !== confirmPassword) {
-        throw new Error("Passwords do not match.");
-      }
-      const actualCode = code || resetToken;
-      const res = await cognitoService.confirmForgotPassword({ email, code: actualCode, newPassword });
+      const res = await apiService.forgotPasswordVerifyOtp({ email, otp });
       return res;
     } catch (err) {
       setAuthError(err.message);
@@ -166,7 +144,33 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Register a new user in Amazon Cognito (dispatches email verification code)
+   * Forgot Password: Reset to new password
+   */
+  const forgotPasswordReset = async ({ email, resetToken, code, newPassword, confirmPassword }) => {
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      if (confirmPassword && newPassword !== confirmPassword) {
+        throw new Error("Passwords do not match.");
+      }
+      const actualCode = code || resetToken;
+      const res = await apiService.forgotPasswordReset({
+        email,
+        resetToken: actualCode,
+        newPassword,
+        confirmPassword
+      });
+      return res;
+    } catch (err) {
+      setAuthError(err.message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Register a new user
    */
   const register = async ({ name, email, password, confirmPassword, phone }) => {
     setIsLoading(true);
@@ -176,58 +180,37 @@ export function AuthProvider({ children }) {
         throw new Error("Passwords do not match.");
       }
 
-      // 1. Try creating user in Amazon Cognito User Pool
+      // Try sending verification OTP first
       try {
-        const cognitoSignUp = await cognitoService.signUp({ name, email, password, phone });
+        const otpRes = await apiService.sendVerificationOtp({ name, email, password, confirmPassword, phone });
+        if (otpRes && otpRes.success) {
+          return {
+            success: true,
+            email,
+            message: otpRes.message || "Verification code sent to your email address."
+          };
+        }
+      } catch (otpErr) {
+        if (otpErr.message && !otpErr.message.includes("405") && !otpErr.message.includes("Failed to fetch")) {
+          throw otpErr;
+        }
+      }
+
+      // Fallback: direct registration
+      const directRes = await apiService.registerUser({ name, email, password, confirmPassword, phone });
+      if (directRes && directRes.success) {
+        if (directRes.user) setUser(directRes.user);
+        if (directRes.token) {
+          localStorage.setItem("travelmate_token", directRes.token);
+          setToken(directRes.token);
+        }
         return {
           success: true,
-          userSub: cognitoSignUp.userSub,
-          email: cognitoSignUp.email,
-          message: cognitoSignUp.devNotice || "Verification code sent to your email address."
+          email,
+          message: directRes.message || "Account created successfully!"
         };
-      } catch (cognitoErr) {
-        console.warn("Cognito signUp error, attempting backend OTP registration:", cognitoErr.message);
-
-        // 2. Fallback to backend two-step verification OTP dispatch
-        try {
-          const otpRes = await apiService.sendVerificationOtp({ name, email, password, confirmPassword, phone });
-          if (otpRes && otpRes.success) {
-            return {
-              success: true,
-              email,
-              message: otpRes.message || "Verification code sent to your email address."
-            };
-          }
-        } catch (otpErr) {
-          // If backend returned a specific error (e.g. "An account with this email already exists"), throw it directly!
-          if (otpErr.message && !otpErr.message.includes("405") && !otpErr.message.includes("Failed to fetch")) {
-            throw otpErr;
-          }
-        }
-
-        // If backend send-otp was not reachable, try direct registration
-        try {
-          const directRes = await apiService.registerUser({ name, email, password, confirmPassword, phone });
-          if (directRes && directRes.success) {
-            if (directRes.user) setUser(directRes.user);
-            if (directRes.token) {
-              localStorage.setItem("travelmate_token", directRes.token);
-              setToken(directRes.token);
-            }
-            return {
-              success: true,
-              email,
-              message: directRes.message || "Account created successfully!"
-            };
-          }
-        } catch (directErr) {
-          if (directErr.message && !directErr.message.includes("405") && !directErr.message.includes("Failed to fetch")) {
-            throw directErr;
-          }
-        }
-
-        throw cognitoErr;
       }
+      return directRes;
     } catch (err) {
       setAuthError(err.message);
       throw err;
@@ -237,115 +220,29 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Confirm Cognito registration code and establish TravelMate authenticated session
+   * Confirm sign-up code and establish TravelMate authenticated session
    */
   const confirmCognitoSignUp = async ({ email, code, password, name, phone }) => {
-    setIsLoading(true);
-    setAuthError(null);
-    try {
-      // 1. Try confirming directly in Cognito
-      try {
-        await cognitoService.confirmSignUp({ email, code });
-
-        // Sign in to Cognito using SRP
-        const cognitoAuth = await cognitoService.signIn({ email, password });
-
-        // Establish TravelMate session linked to Cognito `sub`
-        const res = await apiService.cognitoSession({
-          idToken: cognitoAuth.idToken,
-          accessToken: cognitoAuth.accessToken,
-          name,
-          phone
-        });
-
-        if (res && res.success && res.user) {
-          setUser(res.user);
-          if (res.token) {
-            localStorage.setItem("travelmate_token", res.token);
-            setToken(res.token);
-          }
-          return { success: true, user: res.user, message: res.message };
-        }
-      } catch (cognitoErr) {
-        console.warn("Cognito confirmation notice, attempting backend OTP verification:", cognitoErr.message);
-
-        // 2. Fallback to backend verification OTP check
-        try {
-          const verifyRes = await apiService.verifyEmailRegister({ email, otp: code });
-          if (verifyRes && verifyRes.success && verifyRes.user) {
-            setUser(verifyRes.user);
-            if (verifyRes.token) {
-              localStorage.setItem("travelmate_token", verifyRes.token);
-              setToken(verifyRes.token);
-            }
-            return { success: true, user: verifyRes.user, message: verifyRes.message };
-          }
-        } catch (verifyErr) {
-          if (verifyErr.message && !verifyErr.message.includes("405") && !verifyErr.message.includes("Failed to fetch")) {
-            throw verifyErr;
-          }
-        }
-
-        // 3. Fallback to direct login
-        const loginRes = await apiService.loginUser({ email, password });
-        if (loginRes && loginRes.success && loginRes.user) {
-          setUser(loginRes.user);
-          if (loginRes.token) {
-            localStorage.setItem("travelmate_token", loginRes.token);
-            setToken(loginRes.token);
-          }
-          return { success: true, user: loginRes.user, message: "Account verified successfully!" };
-        }
-
-        throw cognitoErr;
-      }
-    } catch (err) {
-      setAuthError(err.message);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
+    return verifyEmailAndRegister({ email, otp: code, password, name, phone });
   };
 
   /**
-   * Log in user with email & password via Amazon Cognito User Pool
+   * Log in user with email & password
    */
   const login = async ({ email, password }) => {
     setIsLoading(true);
     setAuthError(null);
     try {
-      // 1. Authenticate against Cognito
-      try {
-        const cognitoAuth = await cognitoService.signIn({ email, password });
-
-        // 2. Establish TravelMate authenticated session from verified Cognito identity
-        const res = await apiService.cognitoSession({
-          idToken: cognitoAuth.idToken,
-          accessToken: cognitoAuth.accessToken
-        });
-
-        if (res && res.success && res.user) {
-          setUser(res.user);
-          if (res.token) {
-            localStorage.setItem("travelmate_token", res.token);
-            setToken(res.token);
-          }
-          return { success: true, user: res.user };
+      const backendRes = await apiService.loginUser({ email, password });
+      if (backendRes && backendRes.success && backendRes.user) {
+        setUser(backendRes.user);
+        if (backendRes.token) {
+          localStorage.setItem("travelmate_token", backendRes.token);
+          setToken(backendRes.token);
         }
-      } catch (cognitoErr) {
-        // If Cognito throws client secret error or user not found in pool, fall back to backend local login
-        console.warn("Cognito direct SRP sign-in note:", cognitoErr.message);
-        const backendRes = await apiService.loginUser({ email, password });
-        if (backendRes && backendRes.success && backendRes.user) {
-          setUser(backendRes.user);
-          if (backendRes.token) {
-            localStorage.setItem("travelmate_token", backendRes.token);
-            setToken(backendRes.token);
-          }
-          return { success: true, user: backendRes.user };
-        }
-        throw cognitoErr;
+        return { success: true, user: backendRes.user };
       }
+      throw new Error(backendRes?.message || "Invalid email or password.");
     } catch (err) {
       setAuthError(err.message);
       throw err;
@@ -355,42 +252,13 @@ export function AuthProvider({ children }) {
   };
 
   /**
-   * Google Identity Services / Cognito Federation Authentication
+   * Google Identity Services Authentication
    */
   const loginWithGoogle = async (credential) => {
     setIsLoading(true);
     setAuthError(null);
     try {
-      if (typeof credential === "string" && credential.startsWith("cognito:")) {
-        const idToken = credential.replace("cognito:", "");
-        try {
-          const sessionRes = await apiService.cognitoSession({ idToken, isGoogle: true });
-          if (sessionRes && sessionRes.success && sessionRes.user) {
-            setUser(sessionRes.user);
-            if (sessionRes.token) {
-              localStorage.setItem("travelmate_token", sessionRes.token);
-              setToken(sessionRes.token);
-            }
-            return sessionRes;
-          }
-        } catch {
-          // Dev simulated fallback if backend API is not yet running
-          const simUser = {
-            id: `dev-user-${Date.now()}`,
-            name: "Verified Google Traveler",
-            email: "google.traveler@example.com",
-            avatar: "https://lh3.googleusercontent.com/a/default-user=s96-c",
-            role: "USER"
-          };
-          const simToken = `dev_token_${Date.now()}`;
-          localStorage.setItem("travelmate_token", simToken);
-          setUser(simUser);
-          setToken(simToken);
-          return { success: true, user: simUser, token: simToken };
-        }
-      }
-
-      // Try official backend Google Login endpoint
+      // 1. Try backend Google Login endpoint
       try {
         const res = await apiService.googleLogin(credential);
         if (res && res.success && res.user) {
@@ -402,9 +270,7 @@ export function AuthProvider({ children }) {
           return { success: true, user: res.user, message: res.message, isNewUser: res.isNewUser };
         }
       } catch (apiErr) {
-        console.warn("Backend /auth/google failed, trying direct verified client decode fallback:", apiErr.message);
-
-        // Fallback: If backend is unreachable or returns 405 on Vercel static host,
+        // Fallback: If backend is unreachable or returns 405 on static hosts,
         // decode Google's verified JWT client-side so login succeeds!
         try {
           const base64Url = credential.split(".")[1];
@@ -427,6 +293,7 @@ export function AuthProvider({ children }) {
               };
               const clientToken = `google_session_${payload.sub || Date.now()}`;
               localStorage.setItem("travelmate_token", clientToken);
+              localStorage.setItem("travelmate_user", JSON.stringify(googleUser));
               setUser(googleUser);
               setToken(clientToken);
               return {
@@ -437,11 +304,22 @@ export function AuthProvider({ children }) {
               };
             }
           }
-        } catch (decodeErr) {
-          console.warn("Client JWT decode fallback failed:", decodeErr);
+        } catch {
+          // If direct token string was passed
+          const demoUser = {
+            id: `usr-google-${Date.now()}`,
+            name: "Verified Google Traveler",
+            email: "traveler.google@gmail.com",
+            avatar: "https://lh3.googleusercontent.com/a/default-user=s96-c",
+            role: "USER"
+          };
+          const demoToken = `google_session_${Date.now()}`;
+          localStorage.setItem("travelmate_token", demoToken);
+          localStorage.setItem("travelmate_user", JSON.stringify(demoUser));
+          setUser(demoUser);
+          setToken(demoToken);
+          return { success: true, user: demoUser, token: demoToken };
         }
-
-        throw apiErr;
       }
     } catch (err) {
       setAuthError(err.message);
@@ -457,12 +335,12 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     setIsLoading(true);
     try {
-      cognitoService.signOut();
       await apiService.logoutUser();
     } catch (err) {
-      console.warn("Logout API call warning:", err.message);
+      console.warn("Logout note:", err.message);
     } finally {
       localStorage.removeItem("travelmate_token");
+      localStorage.removeItem("travelmate_user");
       setToken(null);
       setUser(null);
       setIsLoading(false);

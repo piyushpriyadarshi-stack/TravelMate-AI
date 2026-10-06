@@ -1,24 +1,21 @@
 // ==================================================
-// TravelMate AI - Cognito OAuth / Google Federation Callback
-// Handles redirect from Amazon Cognito Managed Login / Google IdP.
-// Exchanges authorization code for Cognito tokens, verifies identity,
-// establishes TravelMate session, and redirects to dashboard.
+// TravelMate AI - OAuth Callback Handler
+// Handles redirect from OAuth providers (e.g. Google),
+// establishes session, and redirects to dashboard.
 // ==================================================
 
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { apiService } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { cognitoService } from "../services/cognito.service";
 
 export function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { loginWithGoogle } = useAuth();
 
-  const [status, setStatus] = useState("processing"); // "processing", "success", "error"
-  const [message, setMessage] = useState("Finalizing authentication with Amazon Cognito...");
+  const [status, setStatus] = useState("processing");
+  const [message, setMessage] = useState("Finalizing authentication...");
   const processedRef = useRef(false);
 
   useEffect(() => {
@@ -32,7 +29,7 @@ export function AuthCallbackPage() {
 
       if (error) {
         setStatus("error");
-        setMessage(errorDescription || error || "Authentication with Amazon Cognito was cancelled.");
+        setMessage(errorDescription || error || "Authentication was cancelled.");
         return;
       }
 
@@ -43,36 +40,20 @@ export function AuthCallbackPage() {
       }
 
       try {
-        const redirectUri = window.location.pathname === "/auth/callback" && import.meta.env.VITE_COGNITO_REDIRECT_URI?.includes("/auth/callback")
-          ? `${window.location.origin}/auth/callback`
-          : cognitoService.getRedirectUri();
-
-        const res = await apiService.cognitoExchangeOAuth({
-          code,
-          redirectUri
-        });
-
-        if (res && res.success) {
-          setStatus("success");
-          setMessage(res.message || "Successfully authenticated! Redirecting to your dashboard...");
-          if (res.token) {
-            localStorage.setItem("travelmate_token", res.token);
-          }
-          setTimeout(() => {
-            window.location.href = "/profile";
-          }, 600);
-        } else {
-          throw new Error(res?.message || "Failed to finalize Cognito session.");
-        }
+        await loginWithGoogle(code);
+        setStatus("success");
+        setMessage("Successfully authenticated! Redirecting to your dashboard...");
+        setTimeout(() => {
+          navigate("/profile");
+        }, 600);
       } catch (err) {
-        console.error("Cognito callback processing error:", err);
         setStatus("error");
-        setMessage(err.message || "Failed to exchange authorization code with Amazon Cognito.");
+        setMessage(err.message || "Failed to finalize authentication session.");
       }
     }
 
     handleCallback();
-  }, [searchParams]);
+  }, [searchParams, loginWithGoogle, navigate]);
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-16">

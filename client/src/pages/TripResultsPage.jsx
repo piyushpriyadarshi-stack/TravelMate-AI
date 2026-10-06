@@ -2005,9 +2005,9 @@ export function TripResultsPage() {
               <div className="space-y-6">
                 <div className="flex items-start justify-between border-b border-slate-100 pb-4">
                   <div>
-                    <span className="text-xs font-bold text-sky-600 uppercase tracking-wider">Step 1 of 2</span>
+                    <span className="text-xs font-bold text-sky-600 uppercase tracking-wider">Trip Checkout</span>
                     <h3 className="text-2xl font-bold font-display text-slate-900">
-                      Review Your Trip to {destination.name}
+                      Review & Book Your Trip to {destination.name}
                     </h3>
                   </div>
                   <button
@@ -2092,373 +2092,43 @@ export function TripResultsPage() {
 
                 <div className="flex items-center justify-between gap-3 pt-2">
                   <button
+                    type="button"
                     onClick={() => setCurrentCheckoutStep(null)}
-                    className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
+                    className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     Back to Customizer
                   </button>
                   <button
-                    onClick={() => {
-                      if (!isAuthenticated) {
-                        navigate("/login", {
-                          state: {
-                            from: {
-                              pathname: "/trip-results",
-                              search: `?destination=${encodeURIComponent(destQuery)}&checkIn=${checkIn}&checkOut=${checkOut}&travelers=${travelersCount}`
-                            },
-                            message: "Please log in or create an account to continue with your booking."
-                          }
-                        });
-                        return;
-                      }
-                      setCurrentCheckoutStep("payment");
-                    }}
-                    className="px-6 py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                    type="button"
+                    disabled={isProcessingPayment}
+                    onClick={handleExecutePayment}
+                    className={`px-6 py-3 rounded-xl text-white text-xs font-bold flex items-center space-x-2 shadow-md transition-all cursor-pointer ${
+                      isProcessingPayment
+                        ? "bg-slate-400 cursor-not-allowed"
+                        : "bg-sky-600 hover:bg-sky-700"
+                    }`}
                   >
-                    <span>Proceed to Payment</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Dual Payment Gateway (Razorpay & Stripe) */}
-            {currentCheckoutStep === "payment" && (
-              <div className="space-y-6">
-                <div className="flex items-start justify-between border-b border-slate-100 pb-4">
-                  <div>
-                    <span className="text-xs font-bold text-sky-600 uppercase tracking-wider">Step 2 of 2</span>
-                    <h3 className="text-2xl font-bold font-display text-slate-900">
-                      Payment Gateway
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setCurrentCheckoutStep(null)}
-                    className="text-slate-400 hover:text-slate-700 text-xl font-bold px-2 py-1"
-                  >
-                    ×
+                    {isProcessingPayment ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Processing & Confirming Booking...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        <span>Confirm & Book {formatCurrency(grandTotal)}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
                   </button>
                 </div>
 
-                {/* Payable Amount & Security Notice */}
-                <div className="bg-gradient-to-r from-sky-50 to-indigo-50 rounded-2xl p-5 border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                  <div>
-                    <span className="text-xs text-sky-800 font-bold block uppercase tracking-wider">Total Payable Amount</span>
-                    <div className="flex items-baseline space-x-2">
-                      <span className="text-3xl font-extrabold text-slate-950 font-display">
-                        {selectedGateway === "stripe" && currency === "USD"
-                          ? `$${Math.round(grandTotal / 85)} USD`
-                          : selectedGateway === "stripe" && currency === "EUR"
-                          ? `€${Math.round(grandTotal / 92)} EUR`
-                          : formatCurrency(grandTotal)}
-                      </span>
-                      {selectedGateway === "stripe" && currency !== "INR" && (
-                        <span className="text-xs text-slate-500 font-medium">
-                          (≈ {formatCurrency(grandTotal)})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-slate-700 bg-white/80 px-3 py-2 rounded-xl border border-sky-100 shadow-xs">
-                    <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <span className="font-bold text-slate-900 block">256-bit Bank Grade Security</span>
-                      <span className="text-[11px] text-slate-500">PCI-DSS Compliant • HMAC SHA-256</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Gateway Selection: Razorpay vs Stripe */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 block">Select Payment Gateway</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    
-                    {/* Razorpay Option */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedGateway("razorpay");
-                        setCurrency("INR");
-                        setPaymentMethod("upi");
-                      }}
-                      className={`p-4 rounded-2xl border text-left transition-all relative ${
-                        selectedGateway === "razorpay"
-                          ? "border-sky-600 bg-sky-50/50 shadow-sm ring-2 ring-sky-500/20"
-                          : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-base">🇮🇳</span>
-                          <span className="font-extrabold text-slate-900 text-sm">Razorpay</span>
-                        </div>
-                        <span className="text-[10px] font-bold bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full">
-                          INR (₹)
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 font-medium">
-                        UPI (GPay / PhonePe), RuPay, Indian Credit & Debit Cards, NetBanking.
-                      </p>
-                      {selectedGateway === "razorpay" && (
-                        <div className="mt-3 flex items-center text-[11px] text-sky-700 font-bold space-x-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Active Gateway</span>
-                        </div>
-                      )}
-                    </button>
-
-                    {/* Stripe Global Option */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedGateway("stripe");
-                        setCurrency("USD");
-                        setPaymentMethod("card");
-                      }}
-                      className={`p-4 rounded-2xl border text-left transition-all relative ${
-                        selectedGateway === "stripe"
-                          ? "border-indigo-600 bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20"
-                          : "border-slate-200 hover:border-slate-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <Globe className="w-4 h-4 text-indigo-600" />
-                          <span className="font-extrabold text-slate-900 text-sm">Stripe Global</span>
-                        </div>
-                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
-                          USD ($) / EUR (€)
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 font-medium">
-                        International Visa, Mastercard, American Express with 3D-Secure.
-                      </p>
-                      {selectedGateway === "stripe" && (
-                        <div className="mt-3 flex items-center text-[11px] text-indigo-700 font-bold space-x-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Active Gateway</span>
-                        </div>
-                      )}
-                    </button>
-
-                  </div>
-                </div>
-
-                {/* Gateway Detail Panels */}
-                {selectedGateway === "razorpay" ? (
-                  <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">Choose Razorpay Payment Method</span>
-                      <span className="text-[11px] text-slate-500">Live & Sandbox Supported</span>
-                    </div>
-
-                    {/* Razorpay Method Tabs */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: "upi", label: "UPI / QR", icon: QrCode },
-                        { id: "card", label: "Cards", icon: CreditCard },
-                        { id: "netbanking", label: "NetBanking", icon: Building2 }
-                      ].map((tab) => {
-                        const Icon = tab.icon;
-                        return (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setPaymentMethod(tab.id)}
-                            className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
-                              paymentMethod === tab.id
-                                ? "bg-sky-600 text-white border-sky-600 shadow-sm"
-                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                            }`}
-                          >
-                            <Icon className="w-3.5 h-3.5" />
-                            <span>{tab.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Razorpay UPI */}
-                    {paymentMethod === "upi" && (
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs text-center space-y-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-                          <QrCode className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800">Scan & Pay via any UPI App</p>
-                          <p className="text-slate-500 text-[11px]">Google Pay • PhonePe • Paytm • BHIM</p>
-                        </div>
-                        <div className="font-mono bg-slate-50 p-2.5 rounded-xl border border-slate-200 inline-block text-sky-700 font-bold text-xs">
-                          travelmate@okhdfcbank
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          Click "Authorize & Pay" below to trigger instant webhook verification and confirmed ticket issue.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Razorpay Card */}
-                    {paymentMethod === "card" && (
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3">
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
-                          <span>Card Details</span>
-                          <span className="text-sky-600 font-bold">RuPay • Visa • Mastercard</span>
-                        </div>
-                        <input
-                          type="text"
-                          readOnly
-                          value="4000 0012 3456 7890"
-                          className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs font-semibold text-slate-800"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            readOnly
-                            value="12 / 28"
-                            className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-center font-mono text-slate-700"
-                          />
-                          <input
-                            type="text"
-                            readOnly
-                            value="CVV: 999"
-                            className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-center font-mono text-slate-700"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Razorpay NetBanking */}
-                    {paymentMethod === "netbanking" && (
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-                        <label className="font-bold text-slate-800 block">Select Indian Bank</label>
-                        <select className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800">
-                          <option>HDFC Bank (Instant Verification)</option>
-                          <option>State Bank of India</option>
-                          <option>ICICI Bank</option>
-                          <option>Axis Bank</option>
-                          <option>Kotak Mahindra Bank</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Stripe Global Panel */
-                  <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">International Card Payment</span>
-                      <div className="flex items-center space-x-1">
-                        {["USD", "EUR"].map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => setCurrency(c)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              currency === c
-                                ? "bg-indigo-600 text-white"
-                                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                            }`}
-                          >
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3">
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-600 block mb-1">Card Number</label>
-                        <input
-                          type="text"
-                          readOnly
-                          value="4242 •••• •••• 4242 (Stripe Test Visa)"
-                          className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs font-semibold text-slate-800"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 block mb-1">Expires</label>
-                          <input
-                            type="text"
-                            readOnly
-                            value="04 / 29"
-                            className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-center font-mono text-slate-700"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 block mb-1">CVC</label>
-                          <input
-                            type="text"
-                            readOnly
-                            value="888"
-                            className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-center font-mono text-slate-700"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-1.5 text-[11px] text-indigo-700 pt-1">
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Protected by Stripe 3D-Secure 2.0 Strong Customer Authentication</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Developer Sandbox Notice */}
-                <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 flex items-start space-x-2 text-[11px] text-emerald-900">
-                  <Shield className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Zero-Config Sandbox Active:</span> You can click "Authorize & Pay" below to simulate an instantaneous verified payment without entering real bank credentials. Real Razorpay/Stripe keys can be placed in <code className="bg-emerald-100 px-1 rounded font-mono text-[10px]">server/.env</code>.
-                  </div>
-                </div>
-
-                {/* Payment Error Alert */}
                 {paymentError && (
                   <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3 text-xs flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>{paymentError}</span>
                   </div>
                 )}
-
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    disabled={isProcessingPayment}
-                    onClick={() => setCurrentCheckoutStep("summary")}
-                    className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    Back to Summary
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isProcessingPayment}
-                    onClick={handleExecutePayment}
-                    className={`px-6 py-3 rounded-xl text-white text-xs font-bold flex items-center space-x-2 shadow-md transition-all ${
-                      isProcessingPayment
-                        ? "bg-slate-400 cursor-not-allowed"
-                        : selectedGateway === "razorpay"
-                        ? "bg-sky-600 hover:bg-sky-700 cursor-pointer"
-                        : "bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
-                    }`}
-                  >
-                    {isProcessingPayment ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Verifying with {selectedGateway === "razorpay" ? "Razorpay" : "Stripe"}...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="w-4 h-4" />
-                        <span>
-                          Authorize & Pay {selectedGateway === "stripe" && currency === "USD"
-                            ? `$${Math.round(grandTotal / 85)} USD`
-                            : selectedGateway === "stripe" && currency === "EUR"
-                            ? `€${Math.round(grandTotal / 92)} EUR`
-                            : formatCurrency(grandTotal)}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
             )}
 

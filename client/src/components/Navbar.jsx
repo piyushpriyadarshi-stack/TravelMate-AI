@@ -1,7 +1,7 @@
 // ==================================================
-// TravelMate AI - Navigation Bar
-// Dynamic navigation displaying auth states (Login/Register
-// vs Profile/Logout) with 100% resilient rendering on both local & public links.
+// TravelMate AI - Navigation Bar (Clerk Auth Integration)
+// Connects Sign In / Sign Up directly with Clerk.
+// Displays Clerk UserButton when signed in and modal triggers when signed out.
 // ==================================================
 
 import React, { useState } from "react";
@@ -21,6 +21,7 @@ import {
   UserPlus,
   MapPin
 } from "lucide-react";
+import { SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import { useAuth } from "../context/AuthContext";
 
 export function Navbar() {
@@ -111,7 +112,7 @@ export function Navbar() {
             )}
 
             {isAuthenticated ? (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Link
                   to="/profile"
                   className="flex items-center space-x-2 px-3.5 py-2 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all text-xs font-bold text-slate-800"
@@ -126,43 +127,46 @@ export function Navbar() {
                     </span>
                   )}
                 </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="p-2 rounded-xl border border-slate-200 hover:bg-rose-50 hover:border-rose-200 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                <UserButton afterSignOutUrl="/" />
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-sky-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  to="/register"
-                  className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 shadow-md shadow-sky-500/20 hover:shadow-lg transition-all duration-200 cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Sign Up</span>
-                </Link>
+                <SignInButton mode="modal">
+                  <button
+                    type="button"
+                    className="px-4 py-2 text-xs font-bold text-slate-700 hover:text-sky-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button
+                    type="button"
+                    className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 shadow-md shadow-sky-500/20 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Sign Up</span>
+                  </button>
+                </SignUpButton>
               </div>
             )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex lg:hidden items-center space-x-2">
-            <Link
-              to={isAuthenticated ? "/profile" : "/login"}
-              className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"
-              aria-label="Account"
-            >
-              <User className="w-5 h-5" />
-            </Link>
+            {isAuthenticated ? (
+              <UserButton afterSignOutUrl="/" />
+            ) : (
+              <SignInButton mode="modal">
+                <button
+                  type="button"
+                  className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
+                  aria-label="Account"
+                >
+                  <User className="w-5 h-5" />
+                </button>
+              </SignInButton>
+            )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-sky-500 cursor-pointer"
@@ -208,14 +212,17 @@ export function Navbar() {
           <div className="pt-4 border-t border-slate-100 flex flex-col space-y-2">
             {isAuthenticated ? (
               <>
-                <Link
-                  to="/profile"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center space-x-3 px-4 py-3 text-sm font-semibold text-slate-800 rounded-xl bg-slate-50 border border-slate-200"
-                >
-                  <User className="w-5 h-5 text-sky-600" />
-                  <span>Profile ({user?.name})</span>
-                </Link>
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center space-x-3 text-sm font-semibold text-slate-800"
+                  >
+                    <User className="w-5 h-5 text-sky-600" />
+                    <span>Profile ({user?.name})</span>
+                  </Link>
+                  <UserButton afterSignOutUrl="/" />
+                </div>
                 {isAdmin && (
                   <Link
                     to="/admin"
@@ -237,20 +244,22 @@ export function Navbar() {
               </>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-3 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 w-full cursor-pointer"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  to="/register"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-3 rounded-xl text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 w-full cursor-pointer"
-                >
-                  Sign Up
-                </Link>
+                <SignInButton mode="modal">
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center py-3 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 w-full cursor-pointer"
+                  >
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center py-3 rounded-xl text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 w-full cursor-pointer"
+                  >
+                    Sign Up
+                  </button>
+                </SignUpButton>
               </div>
             )}
           </div>

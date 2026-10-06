@@ -58,10 +58,13 @@ class CognitoFrontendService {
    * Priority: VITE_COGNITO_REDIRECT_URI -> current window origin (http://localhost:5173).
    */
   getRedirectUri() {
+    if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return window.location.origin;
+    }
     if (import.meta.env.VITE_COGNITO_REDIRECT_URI) {
       return import.meta.env.VITE_COGNITO_REDIRECT_URI;
     }
-    return window.location.origin;
+    return typeof window !== "undefined" ? window.location.origin : "http://localhost:5173";
   }
 
   getCognitoUser(email) {

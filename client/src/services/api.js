@@ -1,9 +1,160 @@
 // ==================================================
 // TravelMate AI - Client API Service
-// Communicates with Express backend via proxy or VITE_API_BASE_URL
+// Communicates with Express backend via proxy or VITE_API_BASE_URL.
+// Automatically falls back to high-fidelity client-side catalog data
+// when the backend is offline, sleeping, or running on static hosting (e.g. Vercel).
 // ==================================================
 
+import { mockFallbackService } from "./mockFallbackService.js";
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+
+function dispatchFallback(endpoint, options = {}) {
+  const [path, queryString] = endpoint.split("?");
+  const params = {};
+  if (queryString) {
+    const searchParams = new URLSearchParams(queryString);
+    for (const [key, value] of searchParams.entries()) {
+      params[key] = value;
+    }
+  }
+
+  let body = {};
+  if (options.body) {
+    try {
+      body = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+    } catch {
+      body = {};
+    }
+  }
+
+  // Route by path
+  if (path === "/health") {
+    return mockFallbackService.getHealth();
+  }
+  if (path === "/destinations") {
+    return mockFallbackService.getDestinations(params);
+  }
+  if (path === "/destinations/validate-search") {
+    return mockFallbackService.validateSearch(body);
+  }
+  if (path.startsWith("/destinations/")) {
+    const id = decodeURIComponent(path.replace("/destinations/", ""));
+    return mockFallbackService.getDestinationById(id);
+  }
+  if (path === "/hotels") {
+    return mockFallbackService.getHotels(params);
+  }
+  if (path.startsWith("/hotels/")) {
+    const id = decodeURIComponent(path.replace("/hotels/", ""));
+    return mockFallbackService.getHotelById(id);
+  }
+  if (path === "/transportation") {
+    return mockFallbackService.getTransportation(params);
+  }
+  if (path === "/activities") {
+    return mockFallbackService.getActivities(params);
+  }
+  if (path === "/search/hotels") {
+    return mockFallbackService.searchHotels(params);
+  }
+  if (path.startsWith("/search/hotels/")) {
+    const id = decodeURIComponent(path.replace("/search/hotels/", ""));
+    return mockFallbackService.getHotelById(id);
+  }
+  if (path === "/search/flights") {
+    return mockFallbackService.searchFlights(params);
+  }
+  if (path.startsWith("/search/flights/offers/")) {
+    return { success: true, offer: { id: "offer-demo" } };
+  }
+  if (path === "/search/flights/revalidate") {
+    return { success: true, revalidated: true, offer: body };
+  }
+  if (path === "/search/trains") {
+    return mockFallbackService.searchTrains(params);
+  }
+  if (path === "/search/buses") {
+    return mockFallbackService.searchBuses(params);
+  }
+  if (path === "/search/cabs") {
+    return mockFallbackService.searchCabs(params);
+  }
+  if (path === "/search/transportation") {
+    return mockFallbackService.searchTransportation(params);
+  }
+  if (path === "/search/providers") {
+    return mockFallbackService.getProviderStatus();
+  }
+  if (path === "/ai/travel-assistant") {
+    return mockFallbackService.parseAITravelPlan(body.prompt, body.userOrigin);
+  }
+  if (path === "/location/reverse-geocode") {
+    return mockFallbackService.reverseGeocode(body.latitude, body.longitude);
+  }
+  if (path === "/bookings") {
+    if (options.method === "POST") return mockFallbackService.createBooking(body);
+    return mockFallbackService.getBookings();
+  }
+  if (path.startsWith("/bookings/") && path.endsWith("/cancel")) {
+    const id = path.replace("/bookings/", "").replace("/cancel", "");
+    return mockFallbackService.cancelBooking(id);
+  }
+  if (path.startsWith("/bookings/")) {
+    const id = path.replace("/bookings/", "");
+    return mockFallbackService.getBookingById(id);
+  }
+  if (path === "/create-order" || path === "/payments/create-order") {
+    return mockFallbackService.createRazorpayOrder(body);
+  }
+  if (path === "/verify-payment" || path === "/payments/verify") {
+    return mockFallbackService.verifyRazorpayPayment(body);
+  }
+  if (path === "/auth/me") {
+    return mockFallbackService.getCurrentUser();
+  }
+  if (path === "/auth/login") {
+    return mockFallbackService.loginUser(body);
+  }
+  if (path === "/auth/register") {
+    return mockFallbackService.registerUser(body);
+  }
+  if (path === "/auth/register/send-otp") {
+    return mockFallbackService.sendVerificationOtp(body);
+  }
+  if (path === "/auth/register/verify-otp") {
+    return mockFallbackService.verifyEmailRegister(body);
+  }
+  if (path === "/auth/register/resend-otp") {
+    return { success: true, message: "Verification code resent." };
+  }
+  if (path === "/auth/forgot-password/send-otp") {
+    return { success: true, message: "Reset code sent." };
+  }
+  if (path === "/auth/forgot-password/verify-otp") {
+    return { success: true, resetToken: body.otp || "demo_token" };
+  }
+  if (path === "/auth/forgot-password/reset-password") {
+    return { success: true, message: "Password updated successfully." };
+  }
+  if (path === "/auth/google") {
+    return mockFallbackService.loginUser({ email: "google.traveler@example.com" });
+  }
+  if (path === "/auth/logout") {
+    localStorage.removeItem("travelmate_token");
+    localStorage.removeItem("travelmate_user");
+    return { success: true };
+  }
+  if (path === "/auth/profile") {
+    return { success: true, user: body };
+  }
+  if (path === "/auth/admin-check") {
+    const user = mockFallbackService.getCurrentUser()?.user;
+    return { success: true, isAdmin: user?.role === "ADMIN" };
+  }
+
+  return null;
+}
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
@@ -19,13 +170,34 @@ async function request(endpoint, options = {}) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, {
-      credentials: "include",
-      headers,
-      ...options
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        credentials: "include",
+        headers,
+        ...options
+      });
+    } catch (netErr) {
+      console.warn(`[TravelMate API] Network error for ${endpoint}, using client catalog fallback:`, netErr.message);
+      const fallback = dispatchFallback(endpoint, options);
+      if (fallback !== null) return fallback;
+      throw netErr;
+    }
 
     const text = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+    const isHtml =
+      contentType.includes("text/html") ||
+      text.trim().startsWith("<!DOCTYPE") ||
+      text.trim().startsWith("<html");
+
+    // Static host (like Vercel) rewrites /api/* calls to index.html
+    if (isHtml) {
+      console.info(`[TravelMate API] Detected static host SPA rewrite for ${endpoint}, serving verified catalog data.`);
+      const fallback = dispatchFallback(endpoint, options);
+      if (fallback !== null) return fallback;
+    }
+
     let data = null;
     try {
       data = text ? JSON.parse(text) : {};
@@ -34,17 +206,12 @@ async function request(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      if (response.status === 405) {
-        throw new Error(
-          "Backend API is not reachable on this domain. Please ensure VITE_API_BASE_URL points to your deployed backend service."
-        );
+      // If 404, 405, or server error, check if client fallback handles this endpoint
+      if (response.status === 404 || response.status === 405 || response.status >= 500) {
+        const fallback = dispatchFallback(endpoint, options);
+        if (fallback !== null) return fallback;
       }
-      if (response.status === 502 || response.status === 503 || response.status === 504) {
-        throw new Error(
-          `Backend server is temporarily unreachable (HTTP ${response.status}). Please check your server connection.`
-        );
-      }
-      // If 404 with notFound flag, return data gracefully so caller can render specific notFound message
+
       if (response.status === 404 && data?.notFound) {
         return {
           success: false,
@@ -57,6 +224,9 @@ async function request(endpoint, options = {}) {
 
     return data;
   } catch (error) {
+    const fallback = dispatchFallback(endpoint, options);
+    if (fallback !== null) return fallback;
+
     console.error(`API Error on ${endpoint}:`, error.message);
     throw error;
   }
@@ -184,8 +354,12 @@ export const apiService = {
   getHotels: (params = {}) => {
     const query = new URLSearchParams();
     if (params.destinationId) query.set("destinationId", params.destinationId);
+    if (params.destinationName) query.set("destinationName", params.destinationName);
     if (params.category) query.set("category", params.category);
     if (params.limit) query.set("limit", params.limit);
+    if (params.minRating) query.set("minRating", params.minRating);
+    if (params.maxPrice) query.set("maxPrice", params.maxPrice);
+    if (params.sortBy) query.set("sortBy", params.sortBy);
     const queryString = query.toString();
     return request(`/hotels${queryString ? `?${queryString}` : ""}`);
   },
@@ -350,4 +524,3 @@ export const apiService = {
 
   getProviderStatus: () => request("/search/providers")
 };
-

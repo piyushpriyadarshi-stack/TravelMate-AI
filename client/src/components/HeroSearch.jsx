@@ -93,17 +93,17 @@ export function HeroSearch() {
 
   // Curated prominent quick picks per Stage 3 requirements
   const quickPicks = [
-    { name: "Goa", country: "India" },
-    { name: "Manali", country: "India" },
-    { name: "Delhi", country: "India" },
-    { name: "Mumbai", country: "India" },
-    { name: "Jaipur", country: "India" },
-    { name: "Bhubaneswar", country: "India" },
-    { name: "Dubai", country: "UAE" },
-    { name: "Singapore", country: "Singapore" },
-    { name: "Paris", country: "France" },
-    { name: "Tokyo", country: "Japan" },
-    { name: "London", country: "United Kingdom" }
+    { name: "Goa", country: "India", icon: "🏖️" },
+    { name: "Manali", country: "India", icon: "❄️" },
+    { name: "Delhi", country: "India", icon: "🏛️" },
+    { name: "Mumbai", country: "India", icon: "🌆" },
+    { name: "Jaipur", country: "India", icon: "🏰" },
+    { name: "Bhubaneswar", country: "India", icon: "🌴" },
+    { name: "Dubai", country: "UAE", icon: "✨" },
+    { name: "Singapore", country: "Singapore", icon: "🦁" },
+    { name: "Paris", country: "France", icon: "🗼" },
+    { name: "Tokyo", country: "Japan", icon: "🌸" },
+    { name: "London", country: "United Kingdom", icon: "🎡" }
   ];
 
   // Fetch destination suggestions as user types
@@ -235,35 +235,42 @@ export function HeroSearch() {
   return (
     <div className="w-full max-w-5xl mx-auto">
       {/* Search Container Card */}
-      <div className="bg-white rounded-3xl shadow-premium border border-slate-100 p-5 sm:p-7 lg:p-8 backdrop-blur-xl relative">
+      <div className="bg-white/95 rounded-3xl shadow-2xl shadow-sky-950/10 border border-slate-200/80 p-5 sm:p-7 lg:p-8 backdrop-blur-2xl relative ring-1 ring-slate-900/5 transition-all">
 
         {/* Stage 4: Top Mode Selector Tabs */}
-        <div className="flex items-center space-x-2 mb-6 border-b border-slate-100 pb-3">
-          <button
-            type="button"
-            onClick={() => setSearchMode("standard")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              searchMode === "standard"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-            }`}
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span>Standard Search</span>
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-3.5">
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setSearchMode("standard")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                searchMode === "standard"
+                  ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+              }`}
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Standard Search</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setSearchMode("ai")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              searchMode === "ai"
-                ? "bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 text-white shadow-xs"
-                : "bg-gradient-to-r from-sky-50 to-indigo-50 hover:from-sky-100 hover:to-indigo-100 text-sky-700 border border-sky-200"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>✨ Plan with AI</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode("ai")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                searchMode === "ai"
+                  ? "bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/20"
+                  : "bg-gradient-to-r from-sky-50 to-indigo-50 hover:from-sky-100 hover:to-indigo-100 text-sky-700 border border-sky-200"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>✨ Plan with AI</span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center space-x-2 text-[11px] font-bold text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Verified Rates • Instant E-Tickets</span>
+          </div>
         </div>
 
         {/* Conditional Mode Rendering: AI Travel Assistant vs Standard Search */}
@@ -517,19 +524,20 @@ export function HeroSearch() {
               <span>Browse 50+ Cities</span>
             </button>
 
-            <span className="text-slate-400 font-medium whitespace-nowrap pl-1">Popular:</span>
+            <span className="text-slate-400 font-semibold whitespace-nowrap pl-1 text-[11px] uppercase tracking-wider">Trending:</span>
             {quickPicks.map((pick) => (
               <button
                 key={pick.name}
                 type="button"
                 onClick={() => handleSelectDestination(pick.name)}
-                className={`px-2.5 py-1 rounded-full font-medium transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex items-center space-x-1.5 cursor-pointer ${
                   destination.toLowerCase() === pick.name.toLowerCase()
-                    ? "bg-sky-600 text-white shadow-xs"
-                    : "bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-600"
+                    ? "bg-sky-600 text-white shadow-md shadow-sky-600/25 ring-2 ring-sky-400/30 scale-105"
+                    : "bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 hover:scale-105"
                 }`}
               >
-                {pick.name}
+                <span>{pick.icon}</span>
+                <span>{pick.name}</span>
               </button>
             ))}
           </div>

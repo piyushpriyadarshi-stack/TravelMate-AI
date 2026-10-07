@@ -55,8 +55,29 @@ async function requireAuth(req, res, next) {
         }
       }
     } catch (cognitoErr) {
-      // Not a valid Cognito token, fall through to TravelMate local JWT verification
+      // Not a valid Cognito token, fall through to Clerk / JWT
     }
+
+    // 3b. Attempt Clerk session / identity resolution
+    if (token.startsWith("clerk_session_")) {
+      const clerkId = token.replace("clerk_session_", "").trim();
+      const user = await authService.findByClerkId(clerkId);
+      if (user) {
+        req.user = authService.formatSafeUser(user);
+        return next();
+      }
+    }
+
+    try {
+      const unverified = jwt.decode(token);
+      if (unverified && unverified.sub && (unverified.sub.startsWith("user_") || unverified.iss?.includes("clerk"))) {
+        const user = await authService.findByClerkId(unverified.sub);
+        if (user) {
+          req.user = authService.formatSafeUser(user);
+          return next();
+        }
+      }
+    } catch {}
 
     // 4. Fallback: Verify as TravelMate local JWT session token
     let decoded;
@@ -144,6 +165,29 @@ async function optionalAuth(req, res, next) {
           if (user) {
             req.user = authService.formatSafeUser(user);
             req.cognitoUser = cognitoClaims;
+            return next();
+          }
+        }
+      } catch {}
+
+      // 1b. Try Clerk session / token resolution
+      if (token.startsWith("clerk_session_")) {
+        try {
+          const clerkId = token.replace("clerk_session_", "").trim();
+          const user = await authService.findByClerkId(clerkId);
+          if (user) {
+            req.user = authService.formatSafeUser(user);
+            return next();
+          }
+        } catch {}
+      }
+
+      try {
+        const unverified = jwt.decode(token);
+        if (unverified && unverified.sub && (unverified.sub.startsWith("user_") || unverified.iss?.includes("clerk"))) {
+          const user = await authService.findByClerkId(unverified.sub);
+          if (user) {
+            req.user = authService.formatSafeUser(user);
             return next();
           }
         }

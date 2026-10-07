@@ -8,15 +8,30 @@
 
 class EmailService {
   constructor() {
-    this.smtpConfigured = Boolean(
-      process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS
-    );
+    this.resendApiKey = process.env.RESEND_API_KEY || null;
+    this.emailFrom = process.env.EMAIL_FROM || "TravelMate AI <onboarding@resend.dev>";
+    this.adminEmail = (process.env.ADMIN_EMAIL || "piyushpriyadarshi980@gmail.com").toLowerCase().trim();
 
     this.transporter = null;
+    this.smtpConfigured = false;
 
-    if (this.smtpConfigured) {
+    // Direct Gmail configuration support
+    if (process.env.GMAIL_USER && (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS)) {
+      try {
+        const nodemailer = require("nodemailer");
+        this.transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS
+          }
+        });
+        this.smtpConfigured = true;
+        this.emailFrom = `TravelMate AI <${process.env.GMAIL_USER}>`;
+      } catch (err) {
+        console.warn("[EmailService] Gmail transport initialization failed:", err.message);
+      }
+    } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         const nodemailer = require("nodemailer");
         this.transporter = nodemailer.createTransport({
@@ -28,11 +43,47 @@ class EmailService {
             pass: process.env.SMTP_PASS
           }
         });
+        this.smtpConfigured = true;
       } catch (err) {
         console.warn("[EmailService] Nodemailer not available or failed to initialize, using console fallback:", err.message);
         this.smtpConfigured = false;
       }
     }
+  }
+
+  /**
+   * Helper: Dispatches email via Resend HTTP REST API.
+   * Node.js v18+ native fetch requires no extra external libraries.
+   */
+  async sendViaResend({ to, subject, html, text }) {
+    if (!this.resendApiKey) return null;
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.resendApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: this.emailFrom,
+          to: Array.isArray(to) ? to : [to],
+          subject,
+          html,
+          text
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        console.log(`[EmailService] Resend email dispatched to ${to} (Message ID: ${data.id})`);
+        return { success: true, mode: "resend", messageId: data.id };
+      } else {
+        console.warn(`[EmailService] Resend delivery notice:`, data.message || data);
+      }
+    } catch (err) {
+      console.warn(`[EmailService] Resend request failed, trying SMTP/fallback:`, err.message);
+    }
+    return null;
   }
 
   /**
@@ -440,26 +491,33 @@ class EmailService {
   }
 
   /**
-   * Generates a modern, responsive HTML email template for Booking & Payment Confirmation.
+   * Generates a modern, responsive HTML email template for Customer Booking Confirmation.
+   * Requirement 10: Includes Customer name, Booking ID, Destination, Origin, Travel date,
+   * Travelers, Transportation details, Hotel name, Room type, Number of rooms, Check-in date,
+   * Check-out date, Total amount, Payment status, Booking status, and thank you note.
    */
-  generateBookingConfirmationTemplate({ name, booking }) {
+  generateCustomerBookingConfirmationTemplate({ name, booking }) {
     const formattedName = name ? name.trim() : (booking.guestDetails?.fullName || "Traveler");
     const appName = "TravelMate AI";
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
     const bookingId = booking.bookingNumber || booking.bookingReference || booking.id;
     const destination = booking.destination || booking.destinationName || "Your Destination";
-    const travelDates = `${booking.checkIn || "N/A"} to ${booking.checkOut || "N/A"} (${booking.nights || 1} nights)`;
-    const hotelDetails = booking.hotel
-      ? `${booking.hotel.name} — ${booking.hotel.roomType || "Standard Room"}`
-      : "Not Included";
+    const origin = booking.transportation?.origin || "Standard Departure City";
+    const checkInDate = booking.checkIn ? (typeof booking.checkIn === "string" ? booking.checkIn.split("T")[0] : new Date(booking.checkIn).toISOString().split("T")[0]) : "N/A";
+    const checkOutDate = booking.checkOut ? (typeof booking.checkOut === "string" ? booking.checkOut.split("T")[0] : new Date(booking.checkOut).toISOString().split("T")[0]) : "N/A";
+    const travelDate = `${checkInDate} to ${checkOutDate} (${booking.nights || 1} night${(booking.nights || 1) === 1 ? "" : "s"})`;
+    const travelers = `${booking.travelers || 1} Traveler(s)`;
+    const hotelName = booking.hotel?.name || "Verified Hotel Partner";
+    const roomType = booking.hotel?.roomType || "Deluxe Suite / Standard Room";
+    const numberOfRooms = booking.hotel?.roomsCount || 1;
     const transportDetails = booking.transportation
-      ? `${booking.transportation.type || "Transport"}: ${booking.transportation.provider || booking.transportation.airline || "Carrier"} ${booking.transportation.flightNumber ? `(${booking.transportation.flightNumber})` : ""} (From: ${booking.transportation.origin} To: ${booking.transportation.destination})`
-      : "Not Included";
-    const amountPaid = typeof booking.grandTotal === "number"
+      ? `${booking.transportation.type || "Transport"}: ${booking.transportation.provider || booking.transportation.airline || "Carrier"} ${booking.transportation.flightNumber ? `(${booking.transportation.flightNumber})` : ""} | Route: ${booking.transportation.origin || origin} ➔ ${booking.transportation.destination || destination}`
+      : "Standard Travel Transit";
+    const totalAmount = typeof booking.grandTotal === "number"
       ? `₹${booking.grandTotal.toLocaleString("en-IN")}`
       : `₹${booking.grandTotal || booking.amount || 0}`;
     const paymentStatus = booking.paymentStatus || "PAID";
-    const travelers = `${booking.travelers || 1} Traveler(s)`;
+    const bookingStatus = booking.bookingStatus || "CONFIRMED";
 
     return `
 <!DOCTYPE html>
@@ -467,7 +525,7 @@ class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Booking Confirmation - ${appName}</title>
+  <title>TravelMate AI — Booking Confirmed — ${bookingId}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc; color: #1e293b; }
     .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
@@ -475,18 +533,19 @@ class EmailService {
     .brand-title { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
     .badge { display: inline-block; margin-top: 8px; padding: 4px 12px; background: rgba(255, 255, 255, 0.2); border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
     .content { padding: 36px 32px; }
-    .success-hero { text-align: center; margin-bottom: 28px; }
-    .success-icon { width: 64px; height: 64px; background-color: #28a745; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #ffffff; font-size: 32px; line-height: 64px; margin-bottom: 12px; }
+    .success-hero { text-align: center; margin-bottom: 24px; }
+    .success-icon { width: 56px; height: 56px; background-color: #10b981; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #ffffff; font-size: 28px; line-height: 56px; margin-bottom: 12px; }
     .success-title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 6px 0; }
     .success-subtitle { font-size: 14px; color: #64748b; margin: 0; }
     .details-table { width: 100%; border-collapse: collapse; margin: 24px 0; background: #f8fafc; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; }
-    .details-table td { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    .details-table td { padding: 11px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
     .details-table tr:last-child td { border-bottom: none; }
-    .label { color: #64748b; font-weight: 600; width: 38%; }
+    .label { color: #64748b; font-weight: 600; width: 40%; }
     .value { color: #0f172a; font-weight: 700; text-align: right; }
     .paid-badge { display: inline-block; background: #dcfce7; color: #166534; font-weight: 800; padding: 2px 10px; border-radius: 9999px; font-size: 11px; }
-    .btn-container { text-align: center; margin: 32px 0 16px 0; }
-    .btn { display: inline-block; background: #0284c7; color: #ffffff !important; font-weight: 700; font-size: 14px; text-decoration: none; padding: 14px 28px; border-radius: 12px; }
+    .thank-you-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center; color: #166534; font-size: 13px; line-height: 1.5; }
+    .btn-container { text-align: center; margin: 24px 0 12px 0; }
+    .btn { display: inline-block; background: #0284c7; color: #ffffff !important; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 26px; border-radius: 12px; }
     .footer { background: #f8fafc; padding: 24px 32px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
   </style>
 </head>
@@ -494,22 +553,25 @@ class EmailService {
   <div class="container">
     <div class="header">
       <h1 class="brand-title">${appName}</h1>
-      <span class="badge">Official Booking & Payment Confirmation</span>
+      <span class="badge">Official Booking Confirmation</span>
     </div>
 
     <div class="content">
       <div class="success-hero">
         <div class="success-icon">&#10003;</div>
-        <h2 class="success-title">Your payment was successful</h2>
-        <p class="success-subtitle">Thank you for your payment. Your trip reservation has been verified and confirmed.</p>
+        <h2 class="success-title">Your Booking is Confirmed!</h2>
+        <p class="success-subtitle">Payment has been verified. Pack your bags for an incredible journey.</p>
       </div>
 
-      <p style="font-size: 14px; color: #334155; margin-bottom: 16px;">
-        Hello <strong>${formattedName}</strong>,<br>
-        We are thrilled to confirm your travel booking with TravelMate AI. Below are your official reservation and payment details:
-      </p>
+      <div class="thank-you-box">
+        <strong>Thank you for choosing ${appName}!</strong> We are honored to accompany you on your travel experience and have verified your itinerary reservations.
+      </div>
 
       <table class="details-table">
+        <tr>
+          <td class="label">Customer Name</td>
+          <td class="value">${formattedName}</td>
+        </tr>
         <tr>
           <td class="label">Booking ID</td>
           <td class="value" style="font-family: monospace; color: #0284c7;">${bookingId}</td>
@@ -519,39 +581,63 @@ class EmailService {
           <td class="value">${destination}</td>
         </tr>
         <tr>
+          <td class="label">Origin</td>
+          <td class="value">${origin}</td>
+        </tr>
+        <tr>
           <td class="label">Travel Date</td>
-          <td class="value">${travelDates}</td>
+          <td class="value">${travelDate}</td>
         </tr>
         <tr>
           <td class="label">Travelers</td>
           <td class="value">${travelers}</td>
         </tr>
         <tr>
-          <td class="label">Hotel Stay</td>
-          <td class="value">${hotelDetails}</td>
-        </tr>
-        <tr>
           <td class="label">Transportation</td>
           <td class="value">${transportDetails}</td>
         </tr>
         <tr>
-          <td class="label">Amount Paid</td>
-          <td class="value" style="color: #16a34a; font-size: 15px;">${amountPaid}</td>
+          <td class="label">Hotel Name</td>
+          <td class="value">${hotelName}</td>
+        </tr>
+        <tr>
+          <td class="label">Room Type</td>
+          <td class="value">${roomType}</td>
+        </tr>
+        <tr>
+          <td class="label">Number of Rooms</td>
+          <td class="value">${numberOfRooms} Room(s)</td>
+        </tr>
+        <tr>
+          <td class="label">Check-in Date</td>
+          <td class="value">${checkInDate}</td>
+        </tr>
+        <tr>
+          <td class="label">Check-out Date</td>
+          <td class="value">${checkOutDate}</td>
+        </tr>
+        <tr>
+          <td class="label">Total Amount</td>
+          <td class="value" style="color: #16a34a; font-size: 15px;">${totalAmount}</td>
         </tr>
         <tr>
           <td class="label">Payment Status</td>
           <td class="value"><span class="paid-badge">${paymentStatus}</span></td>
         </tr>
+        <tr>
+          <td class="label">Booking Status</td>
+          <td class="value"><span class="paid-badge">${bookingStatus}</span></td>
+        </tr>
       </table>
 
       <div class="btn-container">
-        <a href="${clientUrl}/payment-success?bookingId=${encodeURIComponent(bookingId)}" class="btn">View Verified Booking</a>
+        <a href="${clientUrl}/payment-success?bookingId=${encodeURIComponent(bookingId)}" class="btn">View Verified Itinerary</a>
       </div>
     </div>
 
     <div class="footer">
       &copy; ${new Date().getFullYear()} ${appName} Platform. 24/7 Verified Booking Guarantee.<br>
-      Need assistance? Contact support@travelmate.ai
+      Need assistance? Contact us at support@travelmate.ai
     </div>
   </div>
 </body>
@@ -560,58 +646,199 @@ class EmailService {
   }
 
   /**
-   * Sends a real booking confirmation email after successful payment verification.
+   * Generates a modern, responsive HTML email template for Admin Booking Notification.
+   * Requirement 11: Sent to piyushpriyadarshi980@gmail.com with subject:
+   * "New TravelMate AI Booking — {{bookingId}}"
    */
-  async sendBookingConfirmationEmail({ to, name, booking }) {
+  generateAdminBookingNotificationTemplate({ booking, customerName, customerEmail }) {
+    const appName = "TravelMate AI";
+    const bookingId = booking.bookingNumber || booking.bookingReference || booking.id;
+    const destination = booking.destination || booking.destinationName || "Featured Trip";
+    const origin = booking.transportation?.origin || "Standard Origin";
+    const checkInDate = booking.checkIn ? (typeof booking.checkIn === "string" ? booking.checkIn.split("T")[0] : new Date(booking.checkIn).toISOString().split("T")[0]) : "N/A";
+    const checkOutDate = booking.checkOut ? (typeof booking.checkOut === "string" ? booking.checkOut.split("T")[0] : new Date(booking.checkOut).toISOString().split("T")[0]) : "N/A";
+    const travelDate = `${checkInDate} to ${checkOutDate} (${booking.nights || 1} nights)`;
+    const travelers = `${booking.travelers || 1} Traveler(s)`;
+    const transportSelected = booking.transportation
+      ? `${booking.transportation.type || "Transit"}: ${booking.transportation.provider || "Carrier"} ${booking.transportation.flightNumber ? `(${booking.transportation.flightNumber})` : ""}`
+      : "Not Included";
+    const hotelSelected = booking.hotel?.name || "Verified Hotel Partner";
+    const roomType = booking.hotel?.roomType || "Standard Room";
+    const amount = typeof booking.grandTotal === "number"
+      ? `₹${booking.grandTotal.toLocaleString("en-IN")}`
+      : `₹${booking.grandTotal || booking.amount || 0}`;
+    const paymentStatus = booking.paymentStatus || "PAID";
+    const bookingStatus = booking.bookingStatus || "CONFIRMED";
+    const creationTime = booking.createdAt || new Date().toISOString();
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New TravelMate AI Booking — ${bookingId}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9; color: #0f172a; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+    .header { background: #0f172a; color: #ffffff; padding: 24px; text-align: center; }
+    .badge { display: inline-block; background: #f59e0b; color: #000; font-weight: 800; font-size: 11px; padding: 3px 12px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .title { margin: 10px 0 2px 0; font-size: 20px; font-weight: 800; }
+    .subtitle { margin: 0; font-size: 12px; color: #94a3b8; }
+    .content { padding: 24px; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+    .table td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    .table tr:last-child td { border-bottom: none; }
+    .label { color: #64748b; font-weight: 600; width: 40%; }
+    .val { color: #0f172a; font-weight: 700; text-align: right; }
+    .footer { background: #f8fafc; padding: 16px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="badge">ADMIN NOTIFICATION</span>
+      <h2 class="title">New Confirmed Booking</h2>
+      <p class="subtitle">TravelMate AI Automated Reservation System</p>
+    </div>
+    <div class="content">
+      <p style="font-size: 13px; color: #475569; margin: 0 0 12px 0;">
+        A new booking has completed payment verification on TravelMate AI. Reservation details:
+      </p>
+      <table class="table">
+        <tr><td class="label">Booking ID</td><td class="val" style="color: #0284c7; font-family: monospace;">${bookingId}</td></tr>
+        <tr><td class="label">Customer Name</td><td class="val">${customerName || "Guest Traveler"}</td></tr>
+        <tr><td class="label">Customer Email</td><td class="val">${customerEmail || "N/A"}</td></tr>
+        <tr><td class="label">Destination</td><td class="val">${destination}</td></tr>
+        <tr><td class="label">Origin</td><td class="val">${origin}</td></tr>
+        <tr><td class="label">Travel Date</td><td class="val">${travelDate}</td></tr>
+        <tr><td class="label">Travelers</td><td class="val">${travelers}</td></tr>
+        <tr><td class="label">Transportation</td><td class="val">${transportSelected}</td></tr>
+        <tr><td class="label">Hotel</td><td class="val">${hotelSelected}</td></tr>
+        <tr><td class="label">Room Type</td><td class="val">${roomType}</td></tr>
+        <tr><td class="label">Amount Paid</td><td class="val" style="color: #16a34a; font-size: 15px;">${amount}</td></tr>
+        <tr><td class="label">Payment Status</td><td class="val" style="color: #16a34a;">${paymentStatus}</td></tr>
+        <tr><td class="label">Booking Status</td><td class="val" style="color: #0284c7;">${bookingStatus}</td></tr>
+        <tr><td class="label">Creation Time</td><td class="val">${creationTime}</td></tr>
+      </table>
+    </div>
+    <div class="footer">
+      TravelMate AI Administrative Notification &bull; Confidential &bull; Target: piyushpriyadarshi980@gmail.com
+    </div>
+  </div>
+</body>
+</html>
+`;
+  }
+
+  /**
+   * EMAIL 1: Sends official confirmation email to the customer.
+   */
+  async sendCustomerBookingConfirmationEmail({ to, name, booking }) {
     const cleanEmail = (to || "").trim().toLowerCase();
     if (!cleanEmail) {
-      console.warn("[EmailService] No recipient email provided for booking confirmation.");
-      return { success: false, message: "No email provided" };
+      console.warn("[EmailService] No recipient email provided for customer confirmation.");
+      return { success: false, message: "No recipient email provided" };
     }
 
     const bookingId = booking.bookingNumber || booking.bookingReference || booking.id;
-    const destination = booking.destination || booking.destinationName || "Trip";
-    const fromAddress = process.env.SMTP_FROM || `"TravelMate AI" <no-reply@travelmate.ai>`;
+    const subject = `TravelMate AI — Booking Confirmed — ${bookingId}`;
+    const html = this.generateCustomerBookingConfirmationTemplate({ name, booking });
+    const text = `TravelMate AI — Booking Confirmed — ${bookingId}\n\nHello ${name || "Traveler"},\n\nYour payment for booking ${bookingId} was verified and confirmed!\nTotal Amount: ₹${booking.grandTotal || 0}\nStatus: PAID\n\nView itinerary: ${process.env.CLIENT_URL || "http://localhost:5173"}/payment-success?bookingId=${bookingId}\n\nThank you for choosing TravelMate AI!`;
 
-    // 1. Live SMTP Delivery
+    // 1. Live Resend Delivery
+    if (this.resendApiKey) {
+      const resendRes = await this.sendViaResend({ to: cleanEmail, subject, html, text });
+      if (resendRes) return resendRes;
+    }
+
+    // 2. Live SMTP Delivery
     if (this.smtpConfigured && this.transporter) {
       try {
         const info = await this.transporter.sendMail({
-          from: fromAddress,
+          from: this.emailFrom,
           to: cleanEmail,
-          subject: `Payment Confirmed: Your Trip to ${destination} (Booking #${bookingId})`,
-          html: this.generateBookingConfirmationTemplate({ name, booking }),
-          text: `Hello ${name || "Traveler"},\n\nYour payment for booking ${bookingId} to ${destination} was successful and confirmed!\n\nAmount Paid: ₹${booking.grandTotal || 0}\nStatus: PAID\n\nView your booking online: ${process.env.CLIENT_URL || "http://localhost:5173"}/payment-success?bookingId=${bookingId}`
+          subject,
+          html,
+          text
         });
-
-        console.log(`[EmailService] Live booking confirmation email sent to ${cleanEmail} (Message ID: ${info.messageId})`);
-        return {
-          success: true,
-          mode: "smtp",
-          messageId: info.messageId
-        };
+        console.log(`[EmailService] SMTP customer confirmation sent to ${cleanEmail} (ID: ${info.messageId})`);
+        return { success: true, mode: "smtp", messageId: info.messageId };
       } catch (err) {
-        console.error(`[EmailService] SMTP delivery failed for booking confirmation to ${cleanEmail}:`, err.message);
+        console.error(`[EmailService] SMTP customer confirmation failed:`, err.message);
       }
     }
 
-    // 2. Development Simulation
+    // 3. Local / Development Console Simulation
     console.log("\n=======================================================");
-    console.log("📨 [SIMULATED EMAIL DELIVERY] BOOKING CONFIRMATION");
+    console.log("📨 [SIMULATED EMAIL 1] CUSTOMER BOOKING CONFIRMATION");
     console.log("=======================================================");
-    console.log(`To:             ${cleanEmail} (${name || "Traveler"})`);
-    console.log(`Subject:        Payment Confirmed: Your Trip to ${destination} (Booking #${bookingId})`);
+    console.log(`To:             ${cleanEmail} (${name || "Customer"})`);
+    console.log(`Subject:        ${subject}`);
     console.log(`Booking ID:     ${bookingId}`);
-    console.log(`Destination:    ${destination}`);
-    console.log(`Travel Dates:   ${booking.checkIn} to ${booking.checkOut}`);
-    console.log(`Amount Paid:    ₹${booking.grandTotal || 0}`);
-    console.log(`Payment Status: PAID`);
+    console.log(`Destination:    ${booking.destination || booking.destinationName || "N/A"}`);
+    console.log(`Dates:          ${booking.checkIn} to ${booking.checkOut}`);
+    console.log(`Amount:         ₹${booking.grandTotal || 0}`);
+    console.log(`Status:         PAID / CONFIRMED`);
     console.log("=======================================================\n");
 
-    return {
-      success: true,
-      mode: "development_simulated"
-    };
+    return { success: true, mode: "development_simulated" };
+  }
+
+  /**
+   * EMAIL 2: Sends admin reservation notification to piyushpriyadarshi980@gmail.com.
+   */
+  async sendAdminBookingNotificationEmail({ booking, customerName, customerEmail }) {
+    const adminRecipient = this.adminEmail;
+    const bookingId = booking.bookingNumber || booking.bookingReference || booking.id;
+    const subject = `New TravelMate AI Booking — ${bookingId}`;
+    const html = this.generateAdminBookingNotificationTemplate({ booking, customerName, customerEmail });
+    const text = `New TravelMate AI Booking — ${bookingId}\n\nCustomer: ${customerName || "Customer"} (${customerEmail || "N/A"})\nBooking ID: ${bookingId}\nDestination: ${booking.destination || booking.destinationName || "N/A"}\nAmount Paid: ₹${booking.grandTotal || 0}\nStatus: PAID\nCreated: ${booking.createdAt || new Date().toISOString()}`;
+
+    // 1. Live Resend Delivery
+    if (this.resendApiKey) {
+      const resendRes = await this.sendViaResend({ to: adminRecipient, subject, html, text });
+      if (resendRes) return resendRes;
+    }
+
+    // 2. Live SMTP Delivery
+    if (this.smtpConfigured && this.transporter) {
+      try {
+        const info = await this.transporter.sendMail({
+          from: this.emailFrom,
+          to: adminRecipient,
+          subject,
+          html,
+          text
+        });
+        console.log(`[EmailService] SMTP admin notification sent to ${adminRecipient} (ID: ${info.messageId})`);
+        return { success: true, mode: "smtp", messageId: info.messageId };
+      } catch (err) {
+        console.error(`[EmailService] SMTP admin notification failed:`, err.message);
+      }
+    }
+
+    // 3. Local / Development Console Simulation
+    console.log("\n=======================================================");
+    console.log("📨 [SIMULATED EMAIL 2] ADMIN BOOKING NOTIFICATION");
+    console.log("=======================================================");
+    console.log(`To:             ${adminRecipient} (ADMIN)`);
+    console.log(`Subject:        ${subject}`);
+    console.log(`Booking ID:     ${bookingId}`);
+    console.log(`Customer:       ${customerName || "Customer"} (${customerEmail || "N/A"})`);
+    console.log(`Amount:         ₹${booking.grandTotal || 0}`);
+    console.log(`Payment Status: PAID`);
+    console.log(`Booking Status: CONFIRMED`);
+    console.log("=======================================================\n");
+
+    return { success: true, mode: "development_simulated" };
+  }
+
+  /**
+   * Backward-compatible alias for existing callers.
+   */
+  async sendBookingConfirmationEmail(params) {
+    return this.sendCustomerBookingConfirmationEmail(params);
   }
 }
 

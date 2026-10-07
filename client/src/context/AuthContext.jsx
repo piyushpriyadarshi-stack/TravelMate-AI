@@ -26,8 +26,8 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(!isClerkLoaded);
   const [authError, setAuthError] = useState(null);
 
-  // Active user profile: from Clerk if signed in, or from local session
-  const user = isClerkSignedIn && clerkUser
+  // Active user profile: strictly prioritize localUser with backend-verified role
+  const user = localUser || (isClerkSignedIn && clerkUser
     ? {
         id: clerkUser.id,
         name:
@@ -37,33 +37,59 @@ export function AuthProvider({ children }) {
           "Traveler",
         email: clerkUser.primaryEmailAddress?.emailAddress || "",
         avatar: clerkUser.imageUrl || null,
-        role: clerkUser.publicMetadata?.role || "USER"
+        role: clerkUser.primaryEmailAddress?.emailAddress?.toLowerCase() === "piyushpriyadarshi980@gmail.com" ? "ADMIN" : "USER"
       }
-    : localUser;
+    : null);
 
   const isAuthenticated = Boolean(isClerkSignedIn || localUser);
 
-  // Synchronize Clerk user state with localStorage tokens
+  // Synchronize Clerk user state with backend database authority
   useEffect(() => {
     if (isClerkLoaded) {
       setIsLoading(false);
       if (isClerkSignedIn && clerkUser) {
-        const active = {
-          id: clerkUser.id,
-          name:
-            clerkUser.fullName ||
-            clerkUser.firstName ||
-            clerkUser.primaryEmailAddress?.emailAddress?.split("@")[0] ||
-            "Traveler",
-          email: clerkUser.primaryEmailAddress?.emailAddress || "",
-          avatar: clerkUser.imageUrl || null,
-          role: clerkUser.publicMetadata?.role || "USER"
-        };
-        setLocalUser(active);
-        const sessionToken = `clerk_session_${clerkUser.id}`;
-        localStorage.setItem("travelmate_user", JSON.stringify(active));
-        localStorage.setItem("travelmate_token", sessionToken);
-        setToken(sessionToken);
+        const email = clerkUser.primaryEmailAddress?.emailAddress || "";
+        const name =
+          clerkUser.fullName ||
+          clerkUser.firstName ||
+          email.split("@")[0] ||
+          "Traveler";
+        const avatar = clerkUser.imageUrl || null;
+
+        // Backend is the final security authority for role assignment
+        apiService
+          .syncClerkUser({
+            clerkId: clerkUser.id,
+            email,
+            name,
+            avatar
+          })
+          .then((res) => {
+            if (res && res.success && res.user) {
+              setLocalUser(res.user);
+              if (res.token) {
+                localStorage.setItem("travelmate_token", res.token);
+                setToken(res.token);
+              }
+              localStorage.setItem("travelmate_user", JSON.stringify(res.user));
+            }
+          })
+          .catch((err) => {
+            console.warn("Backend Clerk sync notice:", err.message);
+            const fallbackRole = email.toLowerCase() === "piyushpriyadarshi980@gmail.com" ? "ADMIN" : "USER";
+            const active = {
+              id: clerkUser.id,
+              name,
+              email,
+              avatar,
+              role: fallbackRole
+            };
+            setLocalUser(active);
+            const sessionToken = `clerk_session_${clerkUser.id}`;
+            localStorage.setItem("travelmate_user", JSON.stringify(active));
+            localStorage.setItem("travelmate_token", sessionToken);
+            setToken(sessionToken);
+          });
       }
     }
   }, [isClerkLoaded, isClerkSignedIn, clerkUser]);

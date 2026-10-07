@@ -17,6 +17,7 @@ const googleAuthService = require("./googleAuth.service");
 const JWT_SECRET = process.env.JWT_SECRET || "travelmate_super_secret_jwt_key_academic_project_2026";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = 10;
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "piyushpriyadarshi980@gmail.com").toLowerCase().trim();
 
 const DATA_DIR = path.resolve(__dirname, "../../../.data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
@@ -104,7 +105,34 @@ function loadFallbackUsers() {
     }
     if (fs.existsSync(USERS_FILE)) {
       const raw = fs.readFileSync(USERS_FILE, "utf-8");
-      return JSON.parse(raw);
+      const users = JSON.parse(raw);
+      if (Array.isArray(users)) {
+        let hasChanges = false;
+        let adminAccount = users.find(u => u.email && u.email.toLowerCase() === ADMIN_EMAIL);
+        if (!adminAccount) {
+          adminAccount = {
+            id: "usr_admin_piyushpriyadarshi",
+            name: "Piyush Priyadarshi",
+            email: ADMIN_EMAIL,
+            role: "ADMIN",
+            authProvider: "CLERK",
+            avatar: "https://lh3.googleusercontent.com/a/default-user=s96-c",
+            phone: "+91 98765 43210",
+            isEmailVerified: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          users.push(adminAccount);
+          hasChanges = true;
+        } else if (adminAccount.role !== "ADMIN") {
+          adminAccount.role = "ADMIN";
+          hasChanges = true;
+        }
+        if (hasChanges) {
+          saveFallbackUsers(users);
+        }
+      }
+      return users;
     }
   } catch (err) {
     console.warn("Failed reading users.json, using defaults:", err.message);
@@ -116,7 +144,6 @@ function loadFallbackUsers() {
       id: "usr_demo_traveler_001",
       name: "Piyush Sharma",
       email: "traveler@example.com",
-      // bcrypt hash of "password123"
       passwordHash: "$2a$10$7R8QpP8p1K9ZJ2f5L9o7meM2v4w.4l1fXz6b.3u7r4V2n5W8p.4yC",
       phone: "+91 98765 43210",
       role: "USER",
@@ -127,9 +154,17 @@ function loadFallbackUsers() {
       id: "usr_demo_admin_001",
       name: "Admin TravelMate",
       email: "admin@travelmate.ai",
-      // bcrypt hash of "admin123"
       passwordHash: "$2a$10$7R8QpP8p1K9ZJ2f5L9o7meM2v4w.4l1fXz6b.3u7r4V2n5W8p.4yC",
       phone: "+91 99999 88888",
+      role: "ADMIN",
+      createdAt: new Date("2026-08-15T08:30:00.000Z"),
+      updatedAt: new Date("2026-08-15T08:30:00.000Z")
+    },
+    {
+      id: "usr_primary_admin_001",
+      name: "Piyush Priyadarshi",
+      email: ADMIN_EMAIL,
+      phone: "+91 78480 41362",
       role: "ADMIN",
       createdAt: new Date("2026-08-15T08:30:00.000Z"),
       updatedAt: new Date("2026-08-15T08:30:00.000Z")
@@ -177,11 +212,12 @@ class AuthService {
    * Generates a signed JWT for the authenticated user.
    */
   generateToken(user) {
+    const role = (user.email && user.email.toLowerCase().trim() === ADMIN_EMAIL) ? "ADMIN" : (user.role || "USER");
     return jwt.sign(
       {
         id: user.id,
         email: user.email,
-        role: user.role,
+        role,
         name: user.name
       },
       JWT_SECRET,
@@ -204,10 +240,16 @@ class AuthService {
     if (!user) return null;
     const { passwordHash, googleId, ...safeUser } = user;
     safeUser.cognitoSub = user.cognitoSub || null;
+    safeUser.clerkId = user.clerkId || null;
     safeUser.isEmailVerified = user.isEmailVerified !== false;
-    safeUser.authProvider = user.authProvider || (user.cognitoSub ? "COGNITO" : user.passwordHash ? "LOCAL" : "GOOGLE");
+    safeUser.authProvider = user.authProvider || (user.cognitoSub ? "COGNITO" : user.clerkId ? "CLERK" : user.passwordHash ? "LOCAL" : "GOOGLE");
     safeUser.avatar = user.avatar || null;
     safeUser.hasPassword = Boolean(user.passwordHash);
+    if (user.email && user.email.toLowerCase().trim() === ADMIN_EMAIL) {
+      safeUser.role = "ADMIN";
+    } else {
+      safeUser.role = user.role || "USER";
+    }
     return safeUser;
   }
 
@@ -558,10 +600,11 @@ class AuthService {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
     const dbStatus = getDatabaseStatus();
+    let user = null;
 
     if (dbStatus.connected && prisma) {
       try {
-        return await prisma.user.findUnique({
+        user = await prisma.user.findUnique({
           where: { email: cleanEmail }
         });
       } catch (err) {
@@ -569,8 +612,16 @@ class AuthService {
       }
     }
 
-    const fallbackUsers = loadFallbackUsers();
-    return fallbackUsers.find(u => u.email.toLowerCase() === cleanEmail) || null;
+    if (!user) {
+      const fallbackUsers = loadFallbackUsers();
+      user = fallbackUsers.find(u => u.email.toLowerCase() === cleanEmail) || null;
+    }
+
+    if (user && cleanEmail === ADMIN_EMAIL && user.role !== "ADMIN") {
+      user.role = "ADMIN";
+    }
+
+    return user;
   }
 
   /**
@@ -579,10 +630,11 @@ class AuthService {
   async findById(id) {
     if (!id) return null;
     const dbStatus = getDatabaseStatus();
+    let user = null;
 
     if (dbStatus.connected && prisma) {
       try {
-        return await prisma.user.findUnique({
+        user = await prisma.user.findUnique({
           where: { id }
         });
       } catch (err) {
@@ -590,8 +642,226 @@ class AuthService {
       }
     }
 
-    const fallbackUsers = loadFallbackUsers();
-    return fallbackUsers.find(u => u.id === id) || null;
+    if (!user) {
+      const fallbackUsers = loadFallbackUsers();
+      user = fallbackUsers.find(u => u.id === id) || null;
+    }
+
+    if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL && user.role !== "ADMIN") {
+      user.role = "ADMIN";
+    }
+
+    return user;
+  }
+
+  /**
+   * Find a user by stable Clerk identifier.
+   */
+  async findByClerkId(clerkId) {
+    if (!clerkId) return null;
+    const dbStatus = getDatabaseStatus();
+    let user = null;
+
+    if (dbStatus.connected && prisma) {
+      try {
+        user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { id: clerkId },
+              { cognitoSub: clerkId }
+            ]
+          }
+        });
+      } catch (err) {
+        console.warn("Prisma findByClerkId error, checking fallback store:", err.message);
+      }
+    }
+
+    if (!user) {
+      const fallbackUsers = loadFallbackUsers();
+      user = fallbackUsers.find(u => u.clerkId === clerkId || u.id === clerkId) || null;
+    }
+
+    if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL && user.role !== "ADMIN") {
+      user.role = "ADMIN";
+    }
+
+    return user;
+  }
+
+  /**
+   * Upsert a user based on verified Clerk identity.
+   * 1. Check if user with clerkId exists.
+   * 2. If not, check if user with same email exists -> link clerkId (preserves all existing bookings and relationships!).
+   * 3. If neither exists -> create new user.
+   * NEVER stores password in the database.
+   * If email is ADMIN_EMAIL (piyushpriyadarshi980@gmail.com), role is ALWAYS "ADMIN".
+   * For all other newly registered users, role defaults to "USER".
+   */
+  async upsertClerkUser({ clerkId, email, name, phone, avatar, authProvider = "CLERK" }) {
+    if (!clerkId && !email) {
+      throw new Error("Clerk user identifier or email is required.");
+    }
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const cleanName = (name || "").trim() || (cleanEmail ? cleanEmail.split("@")[0] : "Traveler");
+    const cleanPhone = (phone || "").trim() || null;
+    const determinedRole = cleanEmail === ADMIN_EMAIL ? "ADMIN" : "USER";
+
+    // 1. Try finding by clerkId
+    let user = clerkId ? await this.findByClerkId(clerkId) : null;
+
+    if (user) {
+      let hasUpdates = false;
+      const updateData = {};
+      if (cleanName && user.name !== cleanName) {
+        user.name = cleanName;
+        updateData.name = cleanName;
+        hasUpdates = true;
+      }
+      if (cleanPhone && user.phone !== cleanPhone) {
+        user.phone = cleanPhone;
+        updateData.phone = cleanPhone;
+        hasUpdates = true;
+      }
+      if (avatar && user.avatar !== avatar) {
+        user.avatar = avatar;
+        updateData.avatar = avatar;
+        hasUpdates = true;
+      }
+      if (cleanEmail === ADMIN_EMAIL && user.role !== "ADMIN") {
+        user.role = "ADMIN";
+        updateData.role = "ADMIN";
+        hasUpdates = true;
+      }
+      if (hasUpdates) {
+        const dbStatus = getDatabaseStatus();
+        if (dbStatus.connected && prisma) {
+          try {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: updateData
+            });
+          } catch (e) {
+            console.warn("Prisma user update error:", e.message);
+          }
+        }
+        const fallbackUsers = loadFallbackUsers();
+        const found = fallbackUsers.find(u => u.id === user.id || u.clerkId === clerkId);
+        if (found) {
+          Object.assign(found, updateData);
+          saveFallbackUsers(fallbackUsers);
+        }
+      }
+      return user;
+    }
+
+    // 2. Try finding by email (link existing user without creating duplicate, preserving bookings!)
+    if (cleanEmail) {
+      user = await this.findByEmail(cleanEmail);
+      if (user) {
+        user.clerkId = clerkId || user.clerkId;
+        user.authProvider = authProvider;
+        if (cleanName && !user.name) user.name = cleanName;
+        if (cleanPhone && !user.phone) user.phone = cleanPhone;
+        if (cleanEmail === ADMIN_EMAIL) user.role = "ADMIN";
+
+        const dbStatus = getDatabaseStatus();
+        if (dbStatus.connected && prisma) {
+          try {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                authProvider,
+                ...(cleanPhone && !user.phone ? { phone: cleanPhone } : {}),
+                ...(cleanEmail === ADMIN_EMAIL ? { role: "ADMIN" } : {})
+              }
+            });
+          } catch (e) {
+            console.warn("Prisma user link error:", e.message);
+          }
+        }
+        const fallbackUsers = loadFallbackUsers();
+        const found = fallbackUsers.find(u => u.id === user.id || u.email.toLowerCase() === cleanEmail);
+        if (found) {
+          if (clerkId) found.clerkId = clerkId;
+          found.authProvider = authProvider;
+          if (cleanPhone && !found.phone) found.phone = cleanPhone;
+          if (cleanEmail === ADMIN_EMAIL) found.role = "ADMIN";
+          saveFallbackUsers(fallbackUsers);
+        }
+        return user;
+      }
+    }
+
+    // 3. Brand new user -> create in database
+    const dbStatus = getDatabaseStatus();
+    let createdUser = null;
+
+    if (dbStatus.connected && prisma) {
+      try {
+        createdUser = await prisma.user.create({
+          data: {
+            name: cleanName,
+            email: cleanEmail,
+            authProvider,
+            avatar: avatar || null,
+            phone: cleanPhone,
+            role: determinedRole,
+            passwordHash: null
+          }
+        });
+      } catch (err) {
+        console.warn("Prisma create clerk user error, using fallback store:", err.message);
+      }
+    }
+
+    if (!createdUser) {
+      const fallbackUsers = loadFallbackUsers();
+      createdUser = {
+        id: clerkId || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: cleanName,
+        email: cleanEmail,
+        clerkId: clerkId || null,
+        authProvider,
+        avatar: avatar || null,
+        passwordHash: null,
+        phone: cleanPhone,
+        role: determinedRole,
+        isEmailVerified: true,
+        emailVerifiedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      fallbackUsers.push(createdUser);
+      saveFallbackUsers(fallbackUsers);
+    }
+
+    return createdUser;
+  }
+
+  /**
+   * Retrieves all registered customers for the Admin Dashboard.
+   * Strips passwordHash, reset tokens, and secrets.
+   */
+  async getAllUsers() {
+    const dbStatus = getDatabaseStatus();
+    let rawUsers = [];
+
+    if (dbStatus.connected && prisma) {
+      try {
+        rawUsers = await prisma.user.findMany({
+          orderBy: { createdAt: "desc" }
+        });
+      } catch (err) {
+        console.warn("Prisma getAllUsers error, reading fallback store:", err.message);
+      }
+    }
+
+    if (!rawUsers || rawUsers.length === 0) {
+      rawUsers = loadFallbackUsers();
+    }
+
+    return rawUsers.map(u => this.formatSafeUser(u)).filter(Boolean);
   }
 
   /**

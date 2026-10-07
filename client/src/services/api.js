@@ -148,9 +148,95 @@ function dispatchFallback(endpoint, options = {}) {
   if (path === "/auth/profile") {
     return { success: true, user: body };
   }
-  if (path === "/auth/admin-check") {
+  if (path === "/auth/clerk-sync" || path === "/auth/sync-clerk") {
+    const isPiyush = body.email?.toLowerCase() === "piyushpriyadarshi980@gmail.com";
+    const user = {
+      id: body.clerkId || "usr_clerk_demo",
+      name: body.name || "Traveler",
+      email: body.email || "",
+      avatar: body.avatar || null,
+      role: isPiyush ? "ADMIN" : "USER"
+    };
+    const token = `clerk_session_${user.id}`;
+    localStorage.setItem("travelmate_user", JSON.stringify(user));
+    localStorage.setItem("travelmate_token", token);
+    return { success: true, user, token };
+  }
+  if (path === "/auth/admin-check" || path === "/admin/check") {
     const user = mockFallbackService.getCurrentUser()?.user;
-    return { success: true, isAdmin: user?.role === "ADMIN" };
+    return { success: true, isAdmin: user?.role === "ADMIN", role: user?.role || "USER" };
+  }
+  if (path === "/admin/dashboard") {
+    const bRes = mockFallbackService.getBookings();
+    const bookings = bRes?.data || [];
+    const totalBookings = bookings.length;
+    const confirmedBookings = bookings.filter(b => b.status === "CONFIRMED" || b.bookingStatus === "CONFIRMED" || b.paymentStatus === "PAID").length;
+    const pendingBookings = bookings.filter(b => b.status === "PENDING" || b.bookingStatus === "PENDING").length;
+    const cancelledBookings = bookings.filter(b => b.status === "CANCELLED" || b.bookingStatus === "CANCELLED").length;
+    const totalRevenue = bookings
+      .filter(b => b.status === "CONFIRMED" || b.bookingStatus === "CONFIRMED" || b.paymentStatus === "PAID")
+      .reduce((s, b) => s + (parseFloat(b.grandTotal || b.amount || 0) || 0), 0);
+    return {
+      success: true,
+      data: {
+        metrics: {
+          totalBookings,
+          confirmedBookings,
+          pendingBookings,
+          cancelledBookings,
+          totalUsers: 1,
+          totalRevenue: Math.round(totalRevenue)
+        },
+        recentBookings: bookings.slice(0, 10).map(b => ({
+          ...b,
+          customerName: b.customerName || b.guestDetails?.fullName || "Guest Traveler",
+          customerEmail: b.customerEmail || b.guestDetails?.email || "N/A",
+          amount: parseFloat(b.grandTotal || b.amount || 0),
+          paymentStatus: b.paymentStatus || "PAID",
+          bookingStatus: b.status || b.bookingStatus || "CONFIRMED"
+        })),
+        systemStatus: { admin: "piyushpriyadarshi980@gmail.com", verifiedAt: new Date().toISOString() }
+      }
+    };
+  }
+  if (path === "/admin/bookings") {
+    const bRes = mockFallbackService.getBookings();
+    return { success: true, count: bRes.count, bookings: bRes.data };
+  }
+  if (path.startsWith("/admin/bookings/")) {
+    const id = path.replace("/admin/bookings/", "");
+    const res = mockFallbackService.getBookingById(id);
+    return { success: true, booking: res.data || res.booking };
+  }
+  if (path === "/admin/users") {
+    const user = mockFallbackService.getCurrentUser()?.user;
+    return {
+      success: true,
+      count: 1,
+      customers: [
+        {
+          id: user?.id || "usr_001",
+          name: user?.name || "Piyush Priyadarshi",
+          email: user?.email || "piyushpriyadarshi980@gmail.com",
+          role: user?.role || "ADMIN",
+          createdAt: new Date().toISOString(),
+          bookingsCount: 1,
+          totalSpent: 12500
+        }
+      ]
+    };
+  }
+  if (path === "/admin/revenue") {
+    return {
+      success: true,
+      data: {
+        totalVerifiedRevenue: 12500,
+        verifiedBookingsCount: 1,
+        averageOrderValue: 12500,
+        revenueByDestination: { Goa: 12500 },
+        revenueByGateway: { RAZORPAY: 12500 }
+      }
+    };
   }
 
   return null;
@@ -312,7 +398,31 @@ export const apiService = {
       body: JSON.stringify(data)
     }),
 
-  checkAdminAccess: () => request("/auth/admin-check"),
+  checkAdminAccess: () => request("/admin/check"),
+
+  // Clerk User Synchronization
+  syncClerkUser: (data) =>
+    request("/auth/clerk-sync", {
+      method: "POST",
+      body: JSON.stringify(data)
+    }),
+
+  // Admin Dashboard API
+  getAdminDashboard: () => request("/admin/dashboard"),
+
+  getAdminBookings: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.set("status", params.status);
+    if (params.search) query.set("search", params.search);
+    const qs = query.toString();
+    return request(`/admin/bookings${qs ? `?${qs}` : ""}`);
+  },
+
+  getAdminBookingDetails: (id) => request(`/admin/bookings/${encodeURIComponent(id)}`),
+
+  getAdminUsers: () => request("/admin/users"),
+
+  getAdminRevenue: () => request("/admin/revenue"),
 
   // Destinations (Stage 3)
   getDestinations: (params = {}) => {

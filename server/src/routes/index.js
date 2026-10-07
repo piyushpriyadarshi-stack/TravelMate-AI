@@ -42,4 +42,7 @@ router.use("/location", locationRoutes);
 const searchRoutes = require("./search.routes");
 router.use("/search", searchRoutes);
 
+const adminRoutes = require("./admin.routes");
+router.use("/admin", adminRoutes);
+
 module.exports = router;

@@ -37,6 +37,10 @@ router.post("/cognito/exchange-oauth", (req, res) => authController.exchangeCogn
 router.post("/google", (req, res) => authController.googleLogin(req, res));
 router.post("/google-login", (req, res) => authController.googleLogin(req, res));
 
+// 4b. Clerk Authentication Synchronization
+router.post("/clerk-sync", (req, res) => authController.syncClerkUser(req, res));
+router.post("/sync-clerk", (req, res) => authController.syncClerkUser(req, res));
+
 // 5. Backward-compatible direct registration, login, logout
 router.post("/register", (req, res) => authController.register(req, res));
 router.post("/login", (req, res) => authController.login(req, res));

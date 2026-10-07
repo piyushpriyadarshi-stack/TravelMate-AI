@@ -560,8 +560,18 @@ export const mockFallbackService = {
 
   getBookings: () => {
     try {
-      const list = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
-      return { success: true, count: list.length, data: list };
+      const bList = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
+      const tList = JSON.parse(localStorage.getItem("travelmate_trips") || "[]");
+      const combined = [...bList, ...tList];
+      // Deduplicate by reference or id
+      const seen = new Set();
+      const unique = combined.filter(item => {
+        const key = item.bookingReference || item.bookingNumber || item.id;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      return { success: true, count: unique.length, data: unique };
     } catch {
       return { success: true, count: 0, data: [] };
     }
@@ -569,9 +579,11 @@ export const mockFallbackService = {
 
   getBookingById: (id) => {
     try {
-      const list = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
-      const item = list.find((b) => b.id === id || b.bookingReference === id);
-      if (item) return { success: true, data: item };
+      const bList = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
+      const tList = JSON.parse(localStorage.getItem("travelmate_trips") || "[]");
+      const combined = [...bList, ...tList];
+      const item = combined.find((b) => b.id === id || b.bookingReference === id || b.bookingNumber === id);
+      if (item) return { success: true, data: item, booking: item };
     } catch {
       // Ignore
     }
@@ -581,7 +593,7 @@ export const mockFallbackService = {
   cancelBooking: (id) => {
     try {
       const list = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
-      const idx = list.findIndex((b) => b.id === id || b.bookingReference === id);
+      const idx = list.findIndex((b) => b.id === id || b.bookingReference === id || b.bookingNumber === id);
       if (idx !== -1) {
         list[idx].status = "CANCELLED";
         localStorage.setItem("travelmate_bookings", JSON.stringify(list));
@@ -605,11 +617,16 @@ export const mockFallbackService = {
   },
 
   verifyRazorpayPayment: (data) => {
+    const paymentId = data.razorpay_payment_id || `pay_demo_${Date.now()}`;
+    const orderId = data.razorpay_order_id || `order_demo_${Date.now()}`;
     return {
       success: true,
       verified: true,
-      paymentId: data.razorpay_payment_id || `pay_demo_${Date.now()}`,
-      orderId: data.razorpay_order_id
+      paymentId,
+      orderId,
+      bookingReference: data.bookingNumber || `TM-${Math.floor(100000 + Math.random() * 900000)}`,
+      paymentStatus: "PAID",
+      status: "CONFIRMED"
     };
   },
 

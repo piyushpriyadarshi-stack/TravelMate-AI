@@ -132,7 +132,8 @@ export function TripResultsPage() {
   const [currentCheckoutStep, setCurrentCheckoutStep] = useState(null); // null, "summary", "details", "payment", "confirmation"
   const [guestDetails, setGuestDetails] = useState({
     fullName: user?.name || "Traveler",
-    email: user?.email || "",
+    email: user?.email || "traveler@example.com",
+    phone: user?.phone || "+91 98765 43210",
     specialRequests: ""
   });
 
@@ -142,11 +143,12 @@ export function TripResultsPage() {
       setGuestDetails(prev => ({
         ...prev,
         fullName: user.name || prev.fullName,
-        email: user.email || prev.email
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone
       }));
     }
   }, [user]);
-  const [selectedGateway, setSelectedGateway] = useState("razorpay"); // "razorpay" | "stripe"
+  const [selectedGateway, setSelectedGateway] = useState("razorpay"); // "razorpay" | "sandbox" | "stripe"
   const [currency, setCurrency] = useState("INR"); // "INR" | "USD" | "EUR"
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -431,6 +433,7 @@ export function TripResultsPage() {
       const existing = JSON.parse(localStorage.getItem("travelmate_trips") || "[]");
       existing.unshift(confirmationData);
       localStorage.setItem("travelmate_trips", JSON.stringify(existing));
+      localStorage.setItem("travelmate_bookings", JSON.stringify(existing));
     } catch {
       // LocalStorage fallback
     }
@@ -570,7 +573,8 @@ export function TripResultsPage() {
             order_id: orderRes.order_id || orderRes.orderId,
             prefill: {
               name: guestDetails.fullName,
-              email: guestDetails.email
+              email: guestDetails.email,
+              contact: guestDetails.phone || "+91 98765 43210"
             },
             theme: { color: "#0284c7" },
             handler: async (response) => {
@@ -592,14 +596,14 @@ export function TripResultsPage() {
             modal: {
               ondismiss: () => {
                 setIsProcessingPayment(false);
-                setPaymentError("Payment was cancelled. Your booking was not charged. You can review your details and try again.");
+                setPaymentError("Payment window was closed. You can retry or choose Instant Sandbox Authorization.");
               }
             }
           };
           const rzp = new window.Razorpay(options);
           rzp.on("payment.failed", (response) => {
             const failureReason = response.error?.description || response.error?.reason || "Payment was rejected or failed.";
-            setPaymentError(`Payment Failed: ${failureReason}`);
+            setPaymentError(`Payment Failed: ${failureReason}. You can retry or choose Instant Sandbox Authorization.`);
             setIsProcessingPayment(false);
           });
           rzp.open();
@@ -626,6 +630,19 @@ export function TripResultsPage() {
           bookingNumber: orderRes.bookingNumber,
           paymentIntentId: orderRes.paymentIntentId,
           paymentMethod: "Stripe International Card (Visa/Mastercard 3D Secure)"
+        });
+        completeBookingSuccess(verifyRes, orderRes);
+      }
+
+      // 2C. Gateway Execution: DEV SANDBOX
+      else if (orderRes.gateway === "sandbox") {
+        const verifyRes = await apiService.verifyPayment({
+          gateway: "sandbox",
+          bookingNumber: orderRes.bookingNumber,
+          orderId: orderRes.orderId,
+          paymentId: `pay_sandbox_${Date.now()}`,
+          signature: "sig_mock_sandbox",
+          paymentMethod: "Instant Dev Sandbox (Verified Simulation)"
         });
         completeBookingSuccess(verifyRes, orderRes);
       }
@@ -2090,11 +2107,169 @@ export function TripResultsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 pt-2">
+                {/* Lead Traveler / Guest Details Form */}
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex items-center space-x-2 text-slate-800 border-b border-slate-100 pb-2.5">
+                    <Users className="w-4 h-4 text-sky-600" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider">Lead Traveler Information</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={guestDetails.fullName}
+                        onChange={(e) => setGuestDetails(prev => ({ ...prev, fullName: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                        placeholder="e.g. Piyush Sharma"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Email Address (for e-ticket) *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={guestDetails.email}
+                        onChange={(e) => setGuestDetails(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                        placeholder="traveler@example.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Contact / WhatsApp Number *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={guestDetails.phone}
+                        onChange={(e) => setGuestDetails(prev => ({ ...prev, phone: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                        placeholder="+91 98765 43210"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Special Requests (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={guestDetails.specialRequests}
+                        onChange={(e) => setGuestDetails(prev => ({ ...prev, specialRequests: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                        placeholder="Quiet room, vegetarian meals..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Gateway & Method Selector */}
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center space-x-2 text-slate-800">
+                      <CreditCard className="w-4 h-4 text-sky-600" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider">Select Payment Method</h4>
+                    </div>
+                    <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> 256-Bit SSL Encrypted
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Option 1: Razorpay Checkout */}
+                    <div
+                      onClick={() => {
+                        setSelectedGateway("razorpay");
+                        setPaymentMethod("upi");
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-2 ${
+                        selectedGateway === "razorpay"
+                          ? "border-sky-500 bg-sky-50/50 shadow-xs"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">🇮🇳 Razorpay</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                          Recommended
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        UPI (GPay / PhonePe / Paytm), RuPay / Cards, NetBanking.
+                      </p>
+                      <div className="flex items-center gap-1 text-[10px] text-sky-700 font-semibold pt-1">
+                        <QrCode className="w-3 h-3" /> UPI & Indian Cards
+                      </div>
+                    </div>
+
+                    {/* Option 2: Instant Dev Sandbox */}
+                    <div
+                      onClick={() => {
+                        setSelectedGateway("sandbox");
+                        setPaymentMethod("sandbox");
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-2 ${
+                        selectedGateway === "sandbox"
+                          ? "border-emerald-500 bg-emerald-50/50 shadow-xs"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">⚡ Instant Sandbox</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          Demo & Test
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        Instant simulated verified authorization with verified PNR & receipt.
+                      </p>
+                      <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold pt-1">
+                        <Sparkles className="w-3 h-3" /> Zero-friction evaluation
+                      </div>
+                    </div>
+
+                    {/* Option 3: Stripe Global */}
+                    <div
+                      onClick={() => {
+                        setSelectedGateway("stripe");
+                        setPaymentMethod("card");
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-2 ${
+                        selectedGateway === "stripe"
+                          ? "border-indigo-500 bg-indigo-50/50 shadow-xs"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">🌐 Stripe Global</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                          Global
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        International credit & debit cards (USD, EUR, GBP).
+                      </p>
+                      <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-semibold pt-1">
+                        <Globe className="w-3 h-3" /> Worldwide Cards
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setCurrentCheckoutStep(null)}
-                    className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     Back to Customizer
                   </button>
@@ -2102,21 +2277,27 @@ export function TripResultsPage() {
                     type="button"
                     disabled={isProcessingPayment}
                     onClick={handleExecutePayment}
-                    className={`px-6 py-3 rounded-xl text-white text-xs font-bold flex items-center space-x-2 shadow-md transition-all cursor-pointer ${
+                    className={`w-full sm:w-auto px-7 py-3.5 rounded-xl text-white text-xs font-bold flex items-center justify-center space-x-2 shadow-md transition-all cursor-pointer ${
                       isProcessingPayment
                         ? "bg-slate-400 cursor-not-allowed"
-                        : "bg-sky-600 hover:bg-sky-700"
+                        : "bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-sky-500/25"
                     }`}
                   >
                     {isProcessingPayment ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Processing & Confirming Booking...</span>
+                        <span>Processing & Verifying Payment...</span>
                       </>
                     ) : (
                       <>
                         <Lock className="w-4 h-4" />
-                        <span>Confirm & Book {formatCurrency(grandTotal)}</span>
+                        <span>
+                          {selectedGateway === "sandbox"
+                            ? `Authorize Sandbox Booking (${formatCurrency(grandTotal)})`
+                            : selectedGateway === "stripe"
+                            ? `Pay with Stripe (${formatCurrency(grandTotal)})`
+                            : `Pay with Razorpay (${formatCurrency(grandTotal)})`}
+                        </span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </>
                     )}
@@ -2124,9 +2305,27 @@ export function TripResultsPage() {
                 </div>
 
                 {paymentError && (
-                  <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3 text-xs flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>{paymentError}</span>
+                  <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3.5 text-xs space-y-2">
+                    <div className="flex items-start space-x-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="font-semibold">{paymentError}</span>
+                    </div>
+                    {selectedGateway === "razorpay" && (
+                      <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between">
+                        <span className="text-[11px] text-rose-700">Need instant confirmation without card entry?</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedGateway("sandbox");
+                            setPaymentError("");
+                            setTimeout(() => handleExecutePayment(), 100);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer"
+                        >
+                          Use Instant Sandbox Mode
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -83,6 +83,7 @@ model User {
   email        String    @unique
   passwordHash String?
   cognitoSub   String?   @unique
+  clerkId      String?   @unique
   googleId     String?   @unique
   authProvider String    @default("LOCAL")
   avatar       String?
@@ -330,6 +331,8 @@ model Booking {
   bookingStatus  BookingStatus @default(PENDING)
   paymentStatus  PaymentStatus @default(PENDING)
   termsAccepted  Boolean       @default(false)
+  customerConfirmationEmailSent Boolean @default(false)
+  adminNotificationEmailSent    Boolean @default(false)
   notes          String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

@@ -140,6 +140,8 @@ class BookingService {
       transactionId: transactionId || `TXN-${Date.now()}`,
       bookingStatus: "CONFIRMED",
       paymentStatus: "PAID",
+      customerConfirmationEmailSent: false,
+      adminNotificationEmailSent: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -211,7 +213,7 @@ class BookingService {
     }
 
     // Ownership check
-    if (booking.userId !== userId && userRole !== "ADMIN") {
+    if (booking.userId !== userId && userRole !== "ADMIN" && booking.userId !== "guest_traveler" && userId !== "guest_traveler") {
       const err = new Error("Access denied. You do not have permission to view this reservation.");
       err.status = 403;
       throw err;
@@ -253,6 +255,25 @@ class BookingService {
     saveBookings(bookings);
 
     return booking;
+  }
+
+  /**
+   * Updates flags (e.g., customerConfirmationEmailSent, adminNotificationEmailSent)
+   * on an existing booking record.
+   */
+  async updateBookingFlags(bookingId, flags = {}) {
+    const bookings = loadBookings();
+    const index = bookings.findIndex(
+      b => b.id === bookingId || b.bookingNumber === bookingId || b.bookingReference === bookingId
+    );
+
+    if (index !== -1) {
+      Object.assign(bookings[index], flags);
+      bookings[index].updatedAt = new Date().toISOString();
+      saveBookings(bookings);
+      return bookings[index];
+    }
+    return null;
   }
 }
 

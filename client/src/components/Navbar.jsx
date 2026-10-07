@@ -100,17 +100,6 @@ export function Navbar() {
 
           {/* Right Action Buttons */}
           <div className="hidden sm:flex items-center space-x-3">
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className="text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-2 rounded-xl flex items-center space-x-1.5 border border-amber-200 transition-colors"
-                title="Admin Portal"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                <span>Admin</span>
-              </Link>
-            )}
-
             {isAuthenticated ? (
               <div className="flex items-center space-x-2">
                 <Link
@@ -121,11 +110,6 @@ export function Navbar() {
                     {user?.name ? user.name[0].toUpperCase() : "U"}
                   </div>
                   <span className="max-w-[120px] truncate">{user?.name?.split(" ")[0]}</span>
-                  {user?.role === "ADMIN" && (
-                    <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md font-bold uppercase">
-                      Admin
-                    </span>
-                  )}
                 </Link>
               </div>
             ) : (
@@ -227,16 +211,6 @@ export function Navbar() {
                   <User className="w-5 h-5 text-sky-600" />
                   <span>Profile ({user?.name})</span>
                 </Link>
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center space-x-3 px-4 py-2.5 text-sm font-semibold text-amber-800 rounded-xl bg-amber-50"
-                  >
-                    <ShieldAlert className="w-5 h-5 text-amber-600" />
-                    <span>Admin Dashboard</span>
-                  </Link>
-                )}
                 <button
                   type="button"
                   onClick={handleLogout}

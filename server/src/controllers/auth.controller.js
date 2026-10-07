@@ -704,6 +704,50 @@ class AuthController {
       });
     }
   }
+
+  /**
+   * POST /api/auth/clerk-sync
+   * Synchronizes Clerk authenticated identity with TravelMate database.
+   * Strictly resolves role on the backend (backend is final authority).
+   */
+  async syncClerkUser(req, res) {
+    try {
+      const { clerkId, email, name, phone, avatar } = req.body;
+
+      if (!clerkId && !email) {
+        return res.status(400).json({
+          success: false,
+          message: "Clerk user ID or email is required for synchronization."
+        });
+      }
+
+      const user = await authService.upsertClerkUser({
+        clerkId,
+        email,
+        name,
+        phone,
+        avatar
+      });
+
+      const token = authService.generateToken(user);
+      const safeUser = authService.formatSafeUser(user);
+
+      res.cookie("token", token, COOKIE_OPTIONS);
+
+      return res.status(200).json({
+        success: true,
+        message: `Authenticated as ${safeUser.name}`,
+        user: safeUser,
+        token
+      });
+    } catch (error) {
+      console.error("Clerk sync error:", error.message);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to synchronize Clerk user."
+      });
+    }
+  }
 }
 
 module.exports = new AuthController();

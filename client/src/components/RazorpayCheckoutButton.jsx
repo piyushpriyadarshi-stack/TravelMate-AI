@@ -66,7 +66,7 @@ export function RazorpayCheckoutButton({
       }
 
       const orderId = orderData.order_id || orderData.orderId;
-      const keyId = orderData.key_id || orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+      const keyId = orderData.key_id || orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT";
 
       // 3. Configure Razorpay Standard Checkout Modal Options
       const options = {

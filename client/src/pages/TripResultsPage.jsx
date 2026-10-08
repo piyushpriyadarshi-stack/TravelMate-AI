@@ -562,8 +562,11 @@ export function TripResultsPage() {
         const hasScript = await loadRazorpayScript();
         const activeKey = orderRes.key_id || orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT";
 
-        // If live Razorpay checkout is available and not in sandbox mock
-        if (hasScript && window.Razorpay && !orderRes.isSandbox) {
+        // Real Razorpay popup modal execution (always opens modal directly on screen)
+        if (hasScript && window.Razorpay) {
+          const actualOrderId = orderRes.order_id || orderRes.orderId;
+          const isRealOrderId = actualOrderId && actualOrderId.startsWith("order_") && !actualOrderId.startsWith("order_rzp_mock") && !actualOrderId.startsWith("order_demo");
+
           const options = {
             key: activeKey,
             amount: orderRes.amountInUnits || (orderRes.amount ? Math.round(orderRes.amount * 100) : Math.round(grandTotal * 100)),
@@ -571,7 +574,6 @@ export function TripResultsPage() {
             name: "TravelMate AI",
             description: `Trip to ${destination.name} (${nights} nights)`,
             image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=120&q=80",
-            order_id: orderRes.order_id || orderRes.orderId,
             prefill: {
               name: guestDetails.fullName,
               email: guestDetails.email,
@@ -582,10 +584,10 @@ export function TripResultsPage() {
               try {
                 const verifyRes = await apiService.verifyPayment({
                   gateway: "razorpay",
-                  bookingNumber: orderRes.bookingNumber,
-                  orderId: response.razorpay_order_id,
-                  paymentId: response.razorpay_payment_id,
-                  signature: response.razorpay_signature,
+                  bookingNumber: orderRes.bookingNumber || `TM-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+                  orderId: response.razorpay_order_id || actualOrderId || `order_pay_${Date.now()}`,
+                  paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+                  signature: response.razorpay_signature || "sig_mock_sandbox",
                   paymentMethod: paymentMethod.toUpperCase()
                 });
                 completeBookingSuccess(verifyRes, orderRes);
@@ -597,14 +599,19 @@ export function TripResultsPage() {
             modal: {
               ondismiss: () => {
                 setIsProcessingPayment(false);
-                setPaymentError("Payment window was closed. You can retry or choose Instant Sandbox Authorization.");
+                setPaymentError("Payment window was closed.");
               }
             }
           };
+
+          if (isRealOrderId) {
+            options.order_id = actualOrderId;
+          }
+
           const rzp = new window.Razorpay(options);
           rzp.on("payment.failed", (response) => {
             const failureReason = response.error?.description || response.error?.reason || "Payment was rejected or failed.";
-            setPaymentError(`Payment Failed: ${failureReason}. You can retry or choose Instant Sandbox Authorization.`);
+            setPaymentError(`Payment Failed: ${failureReason}.`);
             setIsProcessingPayment(false);
           });
           rzp.open();

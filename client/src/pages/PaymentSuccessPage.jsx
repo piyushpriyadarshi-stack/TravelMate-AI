@@ -39,6 +39,18 @@ export function PaymentSuccessPage() {
   useEffect(() => {
     async function fetchVerifiedBooking() {
       if (!bookingId) {
+        try {
+          const localTrips = JSON.parse(localStorage.getItem("travelmate_trips") || "[]");
+          const localBookings = JSON.parse(localStorage.getItem("travelmate_bookings") || "[]");
+          const allLocal = [...localTrips, ...localBookings];
+          const recentPaid = allLocal.find(b => b && (b.paymentStatus === "PAID" || b.bookingStatus === "CONFIRMED" || b.status === "CONFIRMED"));
+          if (recentPaid) {
+            setBooking(recentPaid);
+            setIsLoading(false);
+            return;
+          }
+        } catch {}
+
         setErrorMessage("No booking reference was provided in the URL.");
         setIsLoading(false);
         return;

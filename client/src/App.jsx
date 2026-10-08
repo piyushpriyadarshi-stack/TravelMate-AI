@@ -89,11 +89,7 @@ export default function App() {
               />
               <Route
                 path="/payment-success"
-                element={
-                  <ProtectedRoute>
-                    <PaymentSuccessPage />
-                  </ProtectedRoute>
-                }
+                element={<PaymentSuccessPage />}
               />
 
               {/* Admin Protected Route */}

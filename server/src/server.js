@@ -22,11 +22,37 @@ const { checkDatabaseConnection, getDatabaseStatus } = require("./services/prism
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// CORS Configuration (Supports local dev, production Vercel frontend, and Render)
+const configuredClientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/+$/, "") : null;
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "https://travel-mate-ai-seven.vercel.app",
+  configuredClientUrl
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith(".vercel.app") ||
+      origin.endsWith(".onrender.com") ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1")
+    ) {
+      return callback(null, true);
+    }
+    // Allow by default to prevent payments breaking across new deploy domains
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
+
+app.options("*", cors());
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -607,26 +607,44 @@ export const mockFallbackService = {
 
   // Razorpay Orders
   createRazorpayOrder: (data) => {
+    const bookingNumber = data.bookingNumber || `TM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderId = `order_demo_${Date.now()}`;
+    const amountInINR = data.amount || data.pricing?.grandTotalINR || 5000;
+    const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT";
+
     return {
       success: true,
-      orderId: `order_demo_${Date.now()}`,
-      keyId: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT",
-      amount: (data.amount || 5000) * 100,
-      currency: data.currency || "INR"
+      gateway: "razorpay",
+      isSandbox: true,
+      orderId,
+      order_id: orderId,
+      keyId,
+      key_id: keyId,
+      amount: amountInINR,
+      amountInUnits: amountInINR * 100,
+      currency: data.currency || "INR",
+      bookingNumber,
+      customer: data.guestDetails || { fullName: "Traveler", email: "traveler@example.com" }
     };
   },
 
   verifyRazorpayPayment: (data) => {
-    const paymentId = data.razorpay_payment_id || `pay_demo_${Date.now()}`;
-    const orderId = data.razorpay_order_id || `order_demo_${Date.now()}`;
+    const paymentId = data.razorpay_payment_id || data.paymentId || `pay_demo_${Date.now()}`;
+    const orderId = data.razorpay_order_id || data.orderId || `order_demo_${Date.now()}`;
+    const bookingRef = data.bookingNumber || `TM-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
     return {
       success: true,
       verified: true,
       paymentId,
       orderId,
-      bookingReference: data.bookingNumber || `TM-${Math.floor(100000 + Math.random() * 900000)}`,
+      bookingReference: bookingRef,
+      invoiceNumber: `INV-TM-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+      transactionId: paymentId,
       paymentStatus: "PAID",
-      status: "CONFIRMED"
+      status: "CONFIRMED",
+      paidAt: new Date().toISOString(),
+      grandTotal: data.amount || 5000
     };
   },
 

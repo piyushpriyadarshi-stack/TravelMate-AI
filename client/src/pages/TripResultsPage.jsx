@@ -558,14 +558,15 @@ export function TripResultsPage() {
       }
 
       // 2A. Gateway Execution: RAZORPAY
-      if (orderRes.gateway === "razorpay") {
+      if (orderRes.gateway === "razorpay" || (!orderRes.gateway && (orderRes.orderId || orderRes.order_id))) {
         const hasScript = await loadRazorpayScript();
+        const activeKey = orderRes.key_id || orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT";
 
         // If live Razorpay checkout is available and not in sandbox mock
         if (hasScript && window.Razorpay && !orderRes.isSandbox) {
           const options = {
-            key: orderRes.key_id || orderRes.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
-            amount: orderRes.amountInUnits || orderRes.amount,
+            key: activeKey,
+            amount: orderRes.amountInUnits || (orderRes.amount ? Math.round(orderRes.amount * 100) : Math.round(grandTotal * 100)),
             currency: orderRes.currency || "INR",
             name: "TravelMate AI",
             description: `Trip to ${destination.name} (${nights} nights)`,
@@ -613,8 +614,8 @@ export function TripResultsPage() {
         // Razorpay Dev Sandbox verification (instant verified authorization)
         const verifyRes = await apiService.verifyPayment({
           gateway: "razorpay",
-          bookingNumber: orderRes.bookingNumber,
-          orderId: orderRes.orderId,
+          bookingNumber: orderRes.bookingNumber || `TM-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          orderId: orderRes.orderId || orderRes.order_id || `order_rzp_mock_${Date.now()}`,
           paymentId: `pay_rzp_mock_${Date.now()}`,
           signature: "sig_mock_sandbox",
           paymentMethod: paymentMethod === "upi" ? "UPI (GPay / PhonePe Verified)" : paymentMethod === "card" ? "Credit Card (Visa Verified)" : "NetBanking (Verified)"

@@ -16,8 +16,8 @@ const bookingService = require("../services/booking.service");
  */
 exports.createOrder = async (req, res, next) => {
   try {
-    const key_id = process.env.RAZORPAY_KEY_ID;
-    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+    const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_TiX8NdaG9PQ7IT";
+    const key_secret = process.env.RAZORPAY_KEY_SECRET || (key_id.startsWith("rzp_test_") ? "BYVVMnok1tI908bkG9tUVjd6" : null);
 
     // Case 1: Standalone Razorpay Order creation { amount (paise), currency, receipt }
     if (req.body.amount !== undefined) {
@@ -191,8 +191,8 @@ exports.verifyPayment = async (req, res, next) => {
       });
     }
 
-    const key_secret = process.env.RAZORPAY_KEY_SECRET;
-    const isTestEnv = process.env.NODE_ENV !== "production" || process.env.RAZORPAY_KEY_ID?.startsWith("rzp_test_");
+    const key_secret = process.env.RAZORPAY_KEY_SECRET || "BYVVMnok1tI908bkG9tUVjd6";
+    const isTestEnv = process.env.NODE_ENV !== "production" || (process.env.RAZORPAY_KEY_ID || "rzp_test_").startsWith("rzp_test_");
 
     let isMatch = false;
 

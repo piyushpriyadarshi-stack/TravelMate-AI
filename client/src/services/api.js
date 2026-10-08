@@ -7,7 +7,31 @@
 
 import { mockFallbackService } from "./mockFallbackService.js";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+function resolveBaseUrl() {
+  const envVal = (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_BACKEND_URL ||
+    ""
+  ).trim();
+
+  // If running locally with no specific backend URL configured, default to /api (uses Vite proxy)
+  if (!envVal || envVal === "/api") {
+    return "/api";
+  }
+
+  // Remove any trailing slashes
+  let cleanUrl = envVal.replace(/\/+$/, "");
+
+  // If the clean URL is a full URL that does not end in /api, append /api so endpoints map correctly to Express
+  if (!cleanUrl.endsWith("/api")) {
+    cleanUrl = `${cleanUrl}/api`;
+  }
+
+  return cleanUrl;
+}
+
+const BASE_URL = resolveBaseUrl();
 
 function dispatchFallback(endpoint, options = {}) {
   const [path, queryString] = endpoint.split("?");
@@ -243,7 +267,11 @@ function dispatchFallback(endpoint, options = {}) {
 }
 
 async function request(endpoint, options = {}) {
-  const url = `${BASE_URL}${endpoint}`;
+  let cleanEndpoint = endpoint;
+  if (BASE_URL.endsWith("/api") && cleanEndpoint.startsWith("/api/")) {
+    cleanEndpoint = cleanEndpoint.replace(/^\/api/, "");
+  }
+  const url = `${BASE_URL}${cleanEndpoint}`;
   const token = localStorage.getItem("travelmate_token");
 
   try {
